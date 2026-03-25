@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import User
 import re
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from .models import UserFile
 
 class RegistrationSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)
@@ -38,10 +38,21 @@ class RegistrationSerializer(serializers.Serializer):
             raise serializers.ValidationError('A user with this email already exists.')
         return value
 
-class LoginSerializer(TokenObtainPairSerializer):
-    def validate(self, attrs):
-        data = super().validate(attrs)
-        data["message"] = "Login successful"
-        data["email"] = self.user.email
-        data["user_id"] = str(self.user.id)
-        return data
+class UserFileSerializer(serializers.ModelSerializer):
+    """
+    File Serializer
+    """
+    size_readable = serializers.SerializerMethodField()
+    class Meta:
+        model = UserFile
+        fields = ['id', 'filename', 'display_name','file_size_bytes', 'size_readable', 'mime_type', 'uploaded_at']
+        read_only_fields = ['id', 'file_size_bytes', 'mime_type', 'uploaded_at']
+        
+
+    def get_size_readable(self, obj):
+        num = float(obj.file_size_bytes)
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if num < 1024.0:
+                return f"{num:.2f} {unit}"
+            num /= 1024.0
+        return f"{num:.2f} TB"
