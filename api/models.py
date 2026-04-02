@@ -41,6 +41,7 @@ class UserFile(models.Model):
     filename = models.CharField(max_length=255)
     mime_type = models.CharField(max_length=100, editable=False)
     uploaded_at = models.DateTimeField(auto_now_add=True)
+    description=models.CharField(max_length=250, null=True)
     
     class Meta:
         db_table = "Files"
