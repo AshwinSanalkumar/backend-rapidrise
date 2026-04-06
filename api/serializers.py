@@ -45,7 +45,7 @@ class UserFileSerializer(serializers.ModelSerializer):
     size_readable = serializers.SerializerMethodField()
     class Meta:
         model = UserFile
-        fields = ['id', 'filename', 'display_name','description','file_size_bytes', 'size_readable','content', 'mime_type', 'uploaded_at']
+        fields = ['id', 'filename', 'display_name','description','is_favorite','file_size_bytes', 'size_readable','content', 'mime_type', 'uploaded_at']
         read_only_fields = ['id', 'file_size_bytes', 'mime_type', 'uploaded_at']
         
 

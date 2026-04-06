@@ -163,6 +163,23 @@ class FileUpdateView(APIView):
         )
         return Response(UserFileSerializer(updated_file).data)
 
+class FavoritesView(APIView):    
+    def patch(self,request, file_id):
+        try:
+            file_uuid = UUID(file_id)
+        except ValueError:
+            return Response(
+                {"error": "Invalid file ID format."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        file_obj = get_object_or_404(UserFile, id=file_uuid, owner=request.user)
+        updated_file = FileStorageService.toggle_file_favorite(request.user, file_obj)
+        return Response({
+            "status": "success",
+            "is_favorite": updated_file.is_favorite,
+            "message": "File marked as favorite" if updated_file.is_favorite else "File removed from favorites"
+        }, status=status.HTTP_200_OK)
+
 
     
 

@@ -44,3 +44,12 @@ class FileStorageService:
        
         file.save()
         return file
+
+    @staticmethod
+    def toggle_file_favorite(user, file_instance):
+        """
+        Toggles the favorite status for a specific user and file.
+        """
+        file_instance.is_favorite = not file_instance.is_favorite
+        file_instance.save()
+        return file_instance
