@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RegisterView, FileUploadView, FileListView ,FavoritesView,FileDetailView,FileUpdateView,CookieTokenObtainPairView,CookieTokenRefreshView, LogoutView
+from .views import RegisterView, FileUploadView, FileListView ,RestoreFileView,FavoritesView,SoftDeleteFile,FileDetailView,FileUpdateView,CookieTokenObtainPairView,CookieTokenRefreshView, LogoutView, FolderListCreateView, FolderDetailView,FolderContentView
 
 
 urlpatterns = [
@@ -14,4 +14,14 @@ urlpatterns = [
     path('files/favorite/<str:file_id>/', FavoritesView.as_view(), name='add-favorites'),
     path('files/list/', FileListView.as_view(), name='file-list'),
     path('files/update/<str:file_id>/', FileUpdateView.as_view(), name='product-update'),
+
+    path('files/delete/<str:file_id>/', SoftDeleteFile.as_view(), name='soft-delete'),
+    path('files/restore/<str:file_id>/', RestoreFileView.as_view(), name='restore-file'),
+
+    path('assets/list/', FolderListCreateView.as_view(), name='folder-list'),
+    path('assets/create/', FolderListCreateView.as_view(), name='folder-create'),
+    path('assets/update/<uuid:folder_id>/', FolderDetailView.as_view(), name='folder-update'),
+    path('assets/view/<uuid:folder_id>/', FolderContentView.as_view(), name='folder-view'),
+    path('assets/view/<uuid:folder_id>/upload/', FolderContentView.as_view(), name='folder-upload'),
+    path('assets/view/<uuid:folder_id>/files/<uuid:file_id>/remove/', FolderContentView.as_view(), name='folder-remove'),
 ]

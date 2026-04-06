@@ -53,3 +53,21 @@ class FileStorageService:
         file_instance.is_favorite = not file_instance.is_favorite
         file_instance.save()
         return file_instance
+
+    @staticmethod
+    def soft_delete_file(user, file_instance):
+        """
+        Toggles the favorite status for a specific user and file.
+        """
+        file_instance.is_deleted = True
+        file_instance.save()
+        return file_instance
+    
+    @staticmethod
+    def restore_file(user, file_instance):
+        """
+        Toggles the favorite status for a specific user and file.
+        """
+        file_instance.is_deleted = False
+        file_instance.save()
+        return file_instance
