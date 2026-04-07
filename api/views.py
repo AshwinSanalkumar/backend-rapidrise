@@ -79,7 +79,7 @@ class LogoutView(APIView):
         response.delete_cookie('refresh_token')
         return response
 
-
+#---------------------------------------------------------------------------------------------
 #FILE MANAGEMENT VIEWS
         
 class FileUploadView(APIView):
@@ -113,7 +113,7 @@ class FileListView(APIView):
     View used to list files
     """
     def get(self, request):
-        files = UserFile.objects.filter(owner=request.user,is_deleted=False)
+        files = FileStorageService.get_user_files(request.user)
         serializer = UserFileSerializer(files, many=True)
         return Response(serializer.data)
     
@@ -214,10 +214,26 @@ class RestoreFileView(APIView):
             "is_deleted": soft_delete_file.is_deleted,
             "message": "File Restored Sucessfully"
         }, status=status.HTTP_200_OK)
+    
+class TrashView(APIView):
+    def get(self,request):
+        files = UserFile.objects.filter(owner=request.user,is_deleted=True)
+        serializer = UserFileSerializer(files, many=True)
+        return Response(serializer.data)
 
+class HardDeleteView(APIView):
+    def delete(self,request,file_id):
+        file_obj = get_object_or_404(UserFile, id=file_id, owner=request.user,is_deleted=True)
+        FileStorageService.hard_delete_file(file_obj)
+        return Response({
+            "status": "success",
+            "message": "File permanently deleted" 
+        }, status=status.HTTP_200_OK)
+    
+#---------------------------------------------------------------------------------------------    
 #FOlDER MANAGEMENT
 
-class FolderListCreateView(APIView):
+class FolderListView(APIView):
     """GET /assets/list/ and POST /assets/create/"""
     def get(self, request):
         folders = FolderService.get_user_folders(request.user)
@@ -228,7 +244,8 @@ class FolderListCreateView(APIView):
             }, status=status.HTTP_200_OK)
         serializer = FolderSerializer(folders, many=True)
         return Response(serializer.data)
-
+    
+class FolderCreateView(APIView):
     def post(self, request):
         name = request.data.get('name')
         if not name:
@@ -236,19 +253,27 @@ class FolderListCreateView(APIView):
         folder = FolderService.create_folder(request.user, name)
         return Response(FolderSerializer(folder).data, status=status.HTTP_201_CREATED)
 
-class FolderDetailView(APIView):
+class FolderUpdateView(APIView):
     """PUT /assets/update/<id>/ and DELETE /assets/delete/<id>/"""
     def put(self, request, folder_id):
         name = request.data.get('name')
-
         folder = FolderService.update_folder(request.user, folder_id, name)
         return Response(FolderSerializer(folder).data)
 
+class FolderDeleteView(APIView):
+    def delete(self,request,folder_id):
+        soft_delete_file = FolderService.delete_folder(request.user, folder_id)
+        return Response({
+            "status": "success",
+            "message": "File Restored Sucessfully"
+        }, status=status.HTTP_200_OK)
+
+         
 class FolderContentView(APIView):
     """GET /assets/view/<id>/ and POST /assets/view/<id>/upload/"""
     def get(self, request, folder_id):
         folder = get_object_or_404(UserFolder, id=folder_id, owner=request.user)
-        files = folder.files.all() # These are the files currently 'mapped' to this folder
+        files = UserFile.objects.filter(folders=folder, is_deleted=False) # These are the files currently 'mapped' to this folder
         
         return Response({
             "id": folder.id,
@@ -256,6 +281,7 @@ class FolderContentView(APIView):
             "files": UserFileSerializer(files, many=True).data
         })
 
+class FolderContentUploadView(APIView):
     def post(self, request, folder_id):
             folder = get_object_or_404(UserFolder, id=folder_id, owner=request.user)
             file_ids = request.data.get('file_ids', [])
@@ -264,17 +290,13 @@ class FolderContentView(APIView):
             updated_files = FolderService.map_existing_files(request.user, folder, file_ids)
             serializer = UserFileSerializer(updated_files, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
-    
+
+class FolderContentDeleteView(APIView):
     def delete(self, request, folder_id, file_id):
-            # 1. Fetch the folder and file, ensuring the current user owns them
             folder = get_object_or_404(UserFolder, id=folder_id, owner=request.user)
             file_to_remove = get_object_or_404(UserFile, id=file_id, owner=request.user)
-            
-            # 2. Remove the association (unlinking)
-            # This assumes you changed 'folder' from a ForeignKey to a ManyToManyField as planned
             folder.files.remove(file_to_remove)
-            
             return Response(status=status.HTTP_204_NO_CONTENT)    
     
-        
-# views.py — Logout
+#---------------------------------------------------------------------------------------------        
+# views.py 

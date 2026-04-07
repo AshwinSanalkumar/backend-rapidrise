@@ -7,6 +7,14 @@ from .models import UserFile
 class FileStorageService:
 
     @staticmethod
+    def get_user_files(user):
+        # Orders by most recent first (-uploaded_at)
+        return UserFile.objects.filter(
+            owner=user, 
+            is_deleted=False
+        ).order_by('-uploaded_at')
+
+    @staticmethod
     def process_and_store_file(user, file_obj,display_name,description):
         """
         api : api/files/upload/
@@ -62,6 +70,14 @@ class FileStorageService:
         file_instance.is_deleted = True
         file_instance.save()
         return file_instance
+    
+    @staticmethod
+    def hard_delete_file(file_instance):
+        """
+        Toggles the favorite status for a specific user and file.
+        """
+        file_instance.delete()
+        return None
     
     @staticmethod
     def restore_file(user, file_instance):

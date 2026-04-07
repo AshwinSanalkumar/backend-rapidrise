@@ -1,4 +1,4 @@
-from django.db.models import Count, Sum
+from django.db.models import Count, Sum, Q
 from django.shortcuts import get_object_or_404
 from .models import UserFolder,UserFile
 from django.db.models import Count, Sum, Value
@@ -8,11 +8,12 @@ from rest_framework.exceptions import ValidationError
 class FolderService:
     @staticmethod
     def get_user_folders(user):
-        # We annotate counts and sizes to keep the API fast
+        """Fetches folders with file counts and sizes, excluding deleted files."""
+        active_files = Q(files__is_deleted=False)
         return UserFolder.objects.filter(owner=user).annotate(
-            files_count=Count('files'),
-            total_size=Coalesce(Sum('files__file_size_bytes'), Value(0))
-        )
+            files_count=Count('files', filter=active_files),
+            total_size=Coalesce(Sum('files__file_size_bytes', filter=active_files), 0)
+        ).order_by('-created_at')
 
     @staticmethod
     def create_folder(user, name):
