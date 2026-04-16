@@ -12,6 +12,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.views.decorators.clickjacking import xframe_options_exempt
+from django.utils import timezone
 
 #AUTH VIEWS
 class RegisterView(APIView):
@@ -181,6 +182,22 @@ class FavoritesView(APIView):
             "message": "File marked as favorite" if updated_file.is_favorite else "File removed from favorites"
         }, status=status.HTTP_200_OK)
     
+
+class UploadHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            year = int(request.query_params.get('year',timezone.now().year))
+            month = int(request.query_params.get('month', timezone.now().month))
+            
+            # Returns history + stats in one efficient call
+            response_data = FileStorageService.get_upload_history(request.user, year, month)
+            return Response(response_data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+
 class SoftDeleteFile(APIView):    
     def delete(self,request, file_id):
         try:

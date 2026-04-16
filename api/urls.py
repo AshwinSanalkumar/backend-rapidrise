@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RegisterView, FileUploadView, FileListView,FolderDeleteView,FolderUpdateView ,FolderContentUploadView,FolderContentDeleteView ,TrashView,RestoreFileView,FavoritesView,SoftDeleteFile,FileDetailView,FileUpdateView,CookieTokenObtainPairView,CookieTokenRefreshView, LogoutView, FolderCreateView,FolderListView,FolderContentView,HardDeleteView
+from .views import RegisterView, FileUploadView, FileListView,FolderDeleteView,FolderUpdateView ,FolderContentUploadView,FolderContentDeleteView ,TrashView,RestoreFileView,FavoritesView,SoftDeleteFile,FileDetailView,FileUpdateView,CookieTokenObtainPairView,CookieTokenRefreshView, LogoutView, FolderCreateView,FolderListView,FolderContentView,HardDeleteView ,UploadHistoryView
 
 
 urlpatterns = [
@@ -14,6 +14,7 @@ urlpatterns = [
     path('files/favorite/<str:file_id>/', FavoritesView.as_view(), name='add-favorites'),
     path('files/list/', FileListView.as_view(), name='file-list'),
     path('files/update/<str:file_id>/', FileUpdateView.as_view(), name='product-update'),
+    path('files/history/', UploadHistoryView.as_view(), name='file-history'),
 
     path('files/delete/<str:file_id>/', SoftDeleteFile.as_view(), name='soft-delete'),
     path('files/restore/<str:file_id>/', RestoreFileView.as_view(), name='restore-file'),
