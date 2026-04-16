@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import User
 import re
-from .models import UserFile
+from .models import UserFile, UserFolder
 
 class RegistrationSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)
@@ -45,7 +45,7 @@ class UserFileSerializer(serializers.ModelSerializer):
     size_readable = serializers.SerializerMethodField()
     class Meta:
         model = UserFile
-        fields = ['id', 'filename', 'display_name','file_size_bytes', 'size_readable', 'mime_type', 'uploaded_at']
+        fields = ['id', 'filename', 'display_name','description','is_favorite','is_deleted','file_size_bytes', 'size_readable','content', 'mime_type', 'uploaded_at']
         read_only_fields = ['id', 'file_size_bytes', 'mime_type', 'uploaded_at']
         
 
@@ -56,3 +56,14 @@ class UserFileSerializer(serializers.ModelSerializer):
                 return f"{num:.2f} {unit}"
             num /= 1024.0
         return f"{num:.2f} TB"
+    
+from rest_framework import serializers
+
+class FolderSerializer(serializers.ModelSerializer):
+    # These fields come from the .annotate() in your Service/View
+    files_count = serializers.IntegerField(read_only=True)
+    total_size = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = UserFolder
+        fields = ['id', 'name', 'files_count', 'total_size', 'color_class']

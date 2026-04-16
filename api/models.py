@@ -33,6 +33,7 @@ def file_storage_path(instance, filename):
 
 class UserFile(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    folders = models.ManyToManyField('UserFolder', related_name='files', blank=True)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     display_name=models.CharField(max_length=255,null=True)
     is_favorite=models.BooleanField(default=False)
@@ -41,6 +42,18 @@ class UserFile(models.Model):
     filename = models.CharField(max_length=255)
     mime_type = models.CharField(max_length=100, editable=False)
     uploaded_at = models.DateTimeField(auto_now_add=True)
+    description=models.CharField(max_length=250, null=True)
+    is_deleted=models.BooleanField(default=False)
     
     class Meta:
         db_table = "Files"
+
+class UserFolder(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    name = models.CharField(max_length=255, unique=True)
+    color_class = models.CharField(max_length=50, default="bg-primary") # For your premium UI
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
