@@ -247,6 +247,24 @@ class HardDeleteView(APIView):
             "message": "File permanently deleted" 
         }, status=status.HTTP_200_OK)
     
+
+class RestoreAllFilesView(APIView):
+    def post(self, request):
+        count = FileStorageService.restore_all_files(request.user)
+        return Response({
+            "status": "success",
+            "message": f"{count} files restored"
+        }, status=status.HTTP_200_OK)
+
+class EmptyTrashView(APIView):
+    def delete(self, request):
+        count = FileStorageService.empty_trash(request.user)
+        return Response({
+            "status": "success",
+            "message": f"Trash emptied: {count} items removed"
+        }, status=status.HTTP_200_OK)
+
+    
 #---------------------------------------------------------------------------------------------    
 #FOlDER MANAGEMENT
 

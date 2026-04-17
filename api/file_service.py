@@ -92,6 +92,28 @@ class FileStorageService:
         file_instance.is_deleted = False
         file_instance.save()
         return file_instance
+
+
+    @staticmethod
+    def restore_all_files(user):
+        """
+        Restores all files marked as deleted for the given user.
+        """
+        updated_count = UserFile.objects.filter(owner=user, is_deleted=True).update(is_deleted=False)
+        return updated_count
+
+    @staticmethod
+    def empty_trash(user):
+        """
+        Permanently deletes all files in the trash for the given user.
+        """
+        deleted_files = UserFile.objects.filter(owner=user, is_deleted=True)
+        count = deleted_files.count()
+        for file_obj in deleted_files:
+            FileStorageService.hard_delete_file(file_obj)
+        return count
+
+
     
     # ... your existing process_and_store_file method ...
 
