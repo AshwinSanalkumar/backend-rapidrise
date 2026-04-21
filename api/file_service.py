@@ -1,13 +1,17 @@
 # SERVICES FRO FILE UPLOAD DOWNLOAD.
 from rest_framework.exceptions import ValidationError
 from django.conf import settings
-from .models import UserFile
+from .models import UserFile, SharedLink
 from collections import defaultdict
 from django.utils import timezone
 import calendar
 from datetime import datetime, date
 from django.db.models import Count, Sum
 from django.utils.timezone import make_aware
+from datetime import timedelta
+from django.urls import reverse
+from django.core.mail import EmailMessage
+
 
 class FileStorageService:
 
@@ -114,9 +118,6 @@ class FileStorageService:
         return count
 
 
-    
-    # ... your existing process_and_store_file method ...
-
     @staticmethod
     def get_upload_history(user, year, month):
         # 1. Optimize range filtering (Works better with DB indexes than __year/__month)
@@ -158,4 +159,61 @@ class FileStorageService:
                 "total_uploads": total_uploads
             }
         }
+    
+
+    @staticmethod
+    def create_shareable_data(file_obj, request, duration_minutes=5, emails=None, message=""):
+        """
+        api: api/files/<file_id>/generate-link/
+        Generate Secure Link and optionally send email to recipients
+        """
+        try:
+            minutes = int(duration_minutes) if duration_minutes else 5
+        except (ValueError, TypeError):
+            minutes = 5
+            
+        expiry = timezone.now() + timedelta(minutes=minutes)
+        shared_link = SharedLink.objects.create(
+            file=file_obj,
+            expires_at=expiry
+        )
+        
+        relative_url = reverse('public-download', kwargs={'token': shared_link.token})
+        full_url = request.build_absolute_uri(relative_url)
+        
+        # Email Notification Logic
+        if emails and isinstance(emails, list) and len(emails) > 0:
+            owner_name = request.user.get_full_name() or request.user.username
+            subject = f"{owner_name} shared a file with you: {file_obj.filename}"
+            
+            # Simple text body (can be upgraded to a template)
+            body = (
+                f"Hello,\n\n"
+                f"{owner_name} has shared a file with you via NexusShare.\n\n"
+                f"File: {file_obj.filename}\n"
+                f"Secure Link: {full_url}\n"
+                f"Expires In: {minutes} minutes\n\n"
+            )
+            
+            if message:
+                body += f"Message from {owner_name}:\n\"{message}\"\n\n"
+                
+            body += "Please download the file before the link expires."
+
+            email = EmailMessage(
+                subject=subject,
+                body=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[settings.DEFAULT_FROM_EMAIL], # BCC recipients to keep them private from each other
+                bcc=emails, 
+            )
+            email.send(fail_silently=False)
+
+        return {
+            "download_url": full_url,
+            "filename": file_obj.filename,
+            "expires_at": shared_link.expires_at,
+            "sent_to": emails if emails else []
+        }
+
     

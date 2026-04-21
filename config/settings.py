@@ -13,7 +13,6 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-
 load_dotenv() 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -146,3 +145,21 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+
+
+
+# The backend to use for sending emails
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+# SMTP Server configuration
+EMAIL_HOST = 'smtp.gmail.com'  # Or your provider (e.g., smtp.sendgrid.net)
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+
+# Credentials - USE ENVIRONMENT VARIABLES
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+
+# The default 'From' address for system-generated emails
+DEFAULT_FROM_EMAIL = 'NexusShare <no-reply@yourdomain.com>'
+FRONTEND_URL = "http://localhost:5173"

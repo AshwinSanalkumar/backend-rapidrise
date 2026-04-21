@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.conf import settings
 import uuid
+from django.utils import timezone
 
 class UserManager(BaseUserManager):
     def create_user(self,email,password=None,**extra_fields):
@@ -57,3 +58,18 @@ class UserFolder(models.Model):
 
     def __str__(self):
         return self.name
+    
+class SharedLink(models.Model):
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    file = models.ForeignKey(UserFile, on_delete=models.CASCADE, related_name='shares')
+    is_accessed = models.BooleanField(default=False)
+    expires_at = models.DateTimeField() 
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    @property
+    def is_expired(self):
+        """Simple, direct security check."""
+        return timezone.now() > self.expires_at
+    
+    class Meta:
+        db_table = "SharedLink"
