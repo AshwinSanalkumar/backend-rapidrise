@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RegisterView, FileUploadView, FileListView,FolderDeleteView,FolderUpdateView ,FolderContentUploadView,FolderContentDeleteView ,TrashView,RestoreFileView, RestoreAllFilesView,EmptyTrashView,FavoritesView,SoftDeleteFile,FileDetailView,FileUpdateView,CookieTokenObtainPairView,CookieTokenRefreshView, LogoutView, FolderCreateView,FolderListView,FolderContentView,HardDeleteView ,UploadHistoryView
+from .views import PublicFileView, RegisterView, FileUploadView, FileListView,FolderDeleteView,CreateSharedLinkView,FolderUpdateView ,FolderContentUploadView,FolderContentDeleteView ,TrashView,RestoreFileView, RestoreAllFilesView,EmptyTrashView,FavoritesView,SoftDeleteFile,FileDetailView,FileUpdateView,CookieTokenObtainPairView,CookieTokenRefreshView, LogoutView, FolderCreateView,FolderListView,FolderContentView,HardDeleteView ,UploadHistoryView
 
 
 urlpatterns = [
@@ -31,5 +31,8 @@ urlpatterns = [
     path('trash/delete/<uuid:file_id>/',HardDeleteView.as_view(),name='hard-delete'),
     path('trash/restore-all/', RestoreAllFilesView.as_view(), name='restore-all'),
     path('trash/empty/', EmptyTrashView.as_view(), name='empty-trash'),
+
+    path('files/<str:file_id>/share/', CreateSharedLinkView.as_view(), name='generate-share-link'),
+    path('file/shared/<str:token>/', PublicFileView.as_view(), name='shared-file'),
 
 ]

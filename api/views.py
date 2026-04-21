@@ -5,14 +5,16 @@ from .serializers import RegistrationSerializer,UserFileSerializer, FolderSerial
 from .auth_service import AuthenticationService
 from .file_service import FileStorageService
 from .folder_service import FolderService
+from .fileShare_service import FileShareService
 from rest_framework.permissions import  IsAuthenticated, AllowAny
-from .models import UserFile,UserFolder
+from .models import UserFile,UserFolder,SharedLink
 from uuid import UUID
 from django.shortcuts import get_object_or_404
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.views.decorators.clickjacking import xframe_options_exempt
 from django.utils import timezone
+from django.http import FileResponse
 
 #AUTH VIEWS
 class RegisterView(APIView):
@@ -334,4 +336,41 @@ class FolderContentDeleteView(APIView):
             return Response(status=status.HTTP_204_NO_CONTENT)    
     
 #---------------------------------------------------------------------------------------------        
-# views.py 
+#FILE SHARE VIEWS
+class CreateSharedLinkView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, file_id):
+        result, error = FileShareService.share_file_via_email(
+            file_id=file_id,
+            user=request.user,
+            request=request,
+            data=request.data
+        )
+
+        if error:
+            return Response({"error": error}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(result, status=status.HTTP_201_CREATED)
+    
+class PublicFileView(APIView):
+    permission_classes = [AllowAny]
+    """
+    api: api/file/view/<token>/
+    View used to access and view the file using a secure link.
+    """
+    def get(self, request, token):
+        file_obj, error = FileShareService.get_file_from_token(token)
+        if error:
+            error_status = status.HTTP_404_NOT_FOUND
+            if "already been used" in error:
+                error_status = status.HTTP_410_GONE
+            elif "format" in error:
+                error_status = status.HTTP_400_BAD_REQUEST   
+            return Response({"error": error}, status=error_status)
+        
+        file_handle = file_obj.content.open('rb')
+        response = FileResponse(file_handle, content_type=file_obj.mime_type)
+        response['Content-Disposition'] = f'inline; filename="{file_obj.filename}"'
+        
+        return response
