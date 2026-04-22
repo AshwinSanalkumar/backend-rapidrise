@@ -16,12 +16,26 @@ from django.core.mail import EmailMessage
 class FileStorageService:
 
     @staticmethod
-    def get_user_files(user):
+    def get_user_files(user, search_term=None, favorites_only=False):
         # Orders by most recent first (-uploaded_at)
-        return UserFile.objects.filter(
+        queryset = UserFile.objects.filter(
             owner=user, 
             is_deleted=False
-        ).order_by('-uploaded_at')
+        )
+        
+        if favorites_only:
+            queryset = queryset.filter(is_favorite=True)
+            
+        if search_term:
+            queryset = queryset.filter(
+                display_name__icontains=search_term
+            ) | queryset.filter(
+                filename__icontains=search_term
+            ) | queryset.filter(
+                description__icontains=search_term
+            )
+            
+        return queryset.order_by('-uploaded_at')
 
     @staticmethod
     def process_and_store_file(user, file_obj,display_name,description):
