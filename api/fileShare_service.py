@@ -1,4 +1,4 @@
-import token
+import threading
 from uuid import UUID
 from datetime import timedelta
 from django.utils import timezone
@@ -7,6 +7,15 @@ from django.conf import settings
 from django.core.mail import EmailMessage
 from django.core.exceptions import ObjectDoesNotExist
 from .models import SharedLink, UserFile
+
+def send_email_async(email):
+    """
+    Helper function to send email in a background thread.
+    """
+    try:
+        email.send(fail_silently=True)
+    except:
+        pass
 
 class FileShareService:
     @staticmethod
@@ -77,8 +86,9 @@ class FileShareService:
             to=recipients if len(recipients) == 1 else [],
             bcc=recipients if len(recipients) > 1 else [],
         )
-        # Send immediately; ensure settings.py SMTP is configured
-        email.send(fail_silently=False)
+        # Offload sending to a background thread to prevent request blocking
+        thread = threading.Thread(target=send_email_async, args=(email,))
+        thread.start()
 
     @staticmethod
     def get_file_from_token(token_str):

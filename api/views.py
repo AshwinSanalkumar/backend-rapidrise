@@ -15,6 +15,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.views.decorators.clickjacking import xframe_options_exempt
 from django.utils import timezone
 from django.http import FileResponse
+from rest_framework.pagination import PageNumberPagination
+
+class StandardPagination(PageNumberPagination):
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 #AUTH VIEWS
 class RegisterView(APIView):
@@ -116,7 +121,16 @@ class FileListView(APIView):
     View used to list files
     """
     def get(self, request):
-        files = FileStorageService.get_user_files(request.user)
+        search_term = request.query_params.get('search')
+        favorites_only = request.query_params.get('favorites') == 'true'
+        files = FileStorageService.get_user_files(request.user, search_term, favorites_only)
+        
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(files, request)
+        if page is not None:
+            serializer = UserFileSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+            
         serializer = UserFileSerializer(files, many=True)
         return Response(serializer.data)
     
@@ -237,6 +251,13 @@ class RestoreFileView(APIView):
 class TrashView(APIView):
     def get(self,request):
         files = UserFile.objects.filter(owner=request.user,is_deleted=True)
+        
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(files, request)
+        if page is not None:
+            serializer = UserFileSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+            
         serializer = UserFileSerializer(files, many=True)
         return Response(serializer.data)
 
@@ -279,6 +300,13 @@ class FolderListView(APIView):
                 "message": "You haven't created any folders yet.",
                 "folders": []
             }, status=status.HTTP_200_OK)
+            
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(folders, request)
+        if page is not None:
+            serializer = FolderSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+            
         serializer = FolderSerializer(folders, many=True)
         return Response(serializer.data)
     
@@ -312,6 +340,16 @@ class FolderContentView(APIView):
         folder = get_object_or_404(UserFolder, id=folder_id, owner=request.user)
         files = UserFile.objects.filter(folders=folder, is_deleted=False) # These are the files currently 'mapped' to this folder
         
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(files, request)
+        if page is not None:
+            serializer = UserFileSerializer(page, many=True)
+            return paginator.get_paginated_response({
+                "id": folder.id,
+                "name": folder.name,
+                "files": serializer.data
+            })
+            
         return Response({
             "id": folder.id,
             "name": folder.name,
