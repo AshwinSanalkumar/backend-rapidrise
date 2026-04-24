@@ -62,7 +62,11 @@ class UserFolder(models.Model):
 class SharedLink(models.Model):
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     file = models.ForeignKey(UserFile, on_delete=models.CASCADE, related_name='shares')
+    receipient_email = models.EmailField(null=True)
+    is_revoked = models.BooleanField(default=False)
+    revoked_at = models.DateTimeField(null=True)
     is_accessed = models.BooleanField(default=False)
+    message = models.TextField(null=True, blank=True)
     expires_at = models.DateTimeField() 
     created_at = models.DateTimeField(auto_now_add=True)
     

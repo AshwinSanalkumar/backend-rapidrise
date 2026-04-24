@@ -134,43 +134,69 @@ class FileStorageService:
 
     @staticmethod
     def get_upload_history(user, year, month):
-        # 1. Optimize range filtering (Works better with DB indexes than __year/__month)
+        # 1. Optimize range filtering
         _, last_day = calendar.monthrange(year, month)
         start_date = make_aware(datetime(year, month, 1))
         end_date = make_aware(datetime(year, month, last_day, 23, 59, 59))
-        # 2. Optimized Query: Fetch only fields we need
+
+        # 2. Fetch Uploads
         files_qs = UserFile.objects.filter(
             owner=user,
             uploaded_at__range=(start_date, end_date),
             is_deleted=False
         ).only('id', 'display_name', 'filename', 'file_size_bytes', 'uploaded_at').order_by('-uploaded_at')
-        # 3. Database Aggregation: Calculate totals directly in the DB
-        # This prevents loading thousands of objects into memory just for counts
-        stats = files_qs.aggregate(
-            count=Count('id'),
-            total_size=Sum('file_size_bytes')
-        )
-        # 4. Global Stats (Optional: Can still include for the overall "Total Uploads")
+
+        # 3. Fetch Shares
+        shares_qs = SharedLink.objects.filter(
+            file__owner=user,
+            created_at__range=(start_date, end_date)
+        ).select_related('file').only('token', 'file__display_name', 'file__filename', 'receipient_email', 'created_at', 'file_id').order_by('-created_at')
+
+        # 4. Global Stats
         total_uploads = UserFile.objects.filter(owner=user, is_deleted=False).count()
+        total_shares = SharedLink.objects.filter(file__owner=user).count()
+
         # 5. Grouping data for the calendar
         history = defaultdict(list)
+        
+        # Add uploads to history
         for f in files_qs:
             day = f.uploaded_at.day
             local_time = timezone.localtime(f.uploaded_at)
             history[day].append({
+                "type": "upload",
                 "id": str(f.id),
                 "name": f.display_name or f.filename,
                 "size": f.file_size_bytes,
                 "time": local_time.strftime("%H:%M"),
             })
+
+        # Add shares to history
+        for s in shares_qs:
+            day = s.created_at.day
+            local_time = timezone.localtime(s.created_at)
+            history[day].append({
+                "type": "share",
+                "file_id": str(s.file_id),
+                "name": s.file.display_name or s.file.filename,
+                "recipient": s.receipient_email or "Public Link",
+                "time": local_time.strftime("%H:%M"),
+            })
+
+        # Sort daily events by time descending
+        for d in history:
+            history[d].sort(key=lambda x: x['time'], reverse=True)
+
         return {
             "history": history,
             "month_stats": {
-                "count": stats['count'] or 0,
-                "total_size": stats['total_size'] or 0,
+                "upload_count": files_qs.count(),
+                "share_count": shares_qs.count(),
+                "total_size": files_qs.aggregate(Sum('file_size_bytes'))['file_size_bytes__sum'] or 0,
             },
             "global_stats": {
-                "total_uploads": total_uploads
+                "total_uploads": total_uploads,
+                "total_shares": total_shares
             }
         }
     

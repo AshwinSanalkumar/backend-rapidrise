@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import User
 import re
-from .models import UserFile, UserFolder
+from .models import UserFile, UserFolder, SharedLink
 
 class RegistrationSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)
@@ -56,8 +56,6 @@ class UserFileSerializer(serializers.ModelSerializer):
                 return f"{num:.2f} {unit}"
             num /= 1024.0
         return f"{num:.2f} TB"
-    
-from rest_framework import serializers
 
 class FolderSerializer(serializers.ModelSerializer):
     # These fields come from the .annotate() in your Service/View
@@ -67,3 +65,26 @@ class FolderSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserFolder
         fields = ['id', 'name', 'files_count', 'total_size', 'color_class']
+
+class SharedLinkSerializer(serializers.ModelSerializer):
+    file_name = serializers.CharField(source='file.filename', read_only=True)
+    display_name = serializers.CharField(source='file.display_name', read_only=True)
+    file_size = serializers.SerializerMethodField()
+    is_expired = serializers.BooleanField(read_only=True)
+
+    def get_file_size(self, obj):
+        num = float(obj.file.file_size_bytes)
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if num < 1024.0:
+                return f"{num:.2f} {unit}"
+            num /= 1024.0
+        return f"{num:.2f} TB"
+
+    class Meta:
+        model = SharedLink
+        fields = [
+            'token', 'file', 'file_name', 'display_name', 'file_size',
+            'receipient_email', 'is_accessed', 'is_revoked', 
+            'revoked_at', 'expires_at', 'created_at', 'is_expired',
+            'message'
+        ]

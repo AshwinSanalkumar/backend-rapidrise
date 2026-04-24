@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import PublicFileView, RegisterView, FileUploadView, FileListView,FolderDeleteView,CreateSharedLinkView,FolderUpdateView ,FolderContentUploadView,FolderContentDeleteView ,TrashView,RestoreFileView, RestoreAllFilesView,EmptyTrashView,FavoritesView,SoftDeleteFile,FileDetailView,FileUpdateView,CookieTokenObtainPairView,CookieTokenRefreshView, LogoutView, FolderCreateView,FolderListView,FolderContentView,HardDeleteView ,UploadHistoryView
+from .views import PublicFileView, RegisterView, FileUploadView, FileListView,FolderDeleteView,CreateSharedLinkView,RevokeSharedLinkView,ListSharedLinksView,FolderUpdateView ,FolderContentUploadView,FolderContentDeleteView ,TrashView,RestoreFileView, RestoreAllFilesView,EmptyTrashView,FavoritesView,SoftDeleteFile,FileDetailView,FileUpdateView,CookieTokenObtainPairView,CookieTokenRefreshView, LogoutView, FolderCreateView,FolderListView,FolderContentView,HardDeleteView ,UploadHistoryView
 
 
 urlpatterns = [
@@ -33,6 +33,8 @@ urlpatterns = [
     path('trash/empty/', EmptyTrashView.as_view(), name='empty-trash'),
 
     path('files/<str:file_id>/share/', CreateSharedLinkView.as_view(), name='generate-share-link'),
+    path('files/shared-links/', ListSharedLinksView.as_view(), name='list-shared-links'),
+    path('files/share/revoke/<str:token>/', RevokeSharedLinkView.as_view(), name='revoke-share-link'),
     path('file/shared/<str:token>/', PublicFileView.as_view(), name='shared-file'),
 
 ]

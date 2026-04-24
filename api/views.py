@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import RegistrationSerializer,UserFileSerializer, FolderSerializer
+from .serializers import RegistrationSerializer,UserFileSerializer, FolderSerializer, SharedLinkSerializer
 from .auth_service import AuthenticationService
 from .file_service import FileStorageService
 from .folder_service import FolderService
@@ -390,6 +390,33 @@ class CreateSharedLinkView(APIView):
             return Response({"error": error}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(result, status=status.HTTP_201_CREATED)
+
+class ListSharedLinksView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        search_term = request.query_params.get('search')
+        status_filter = request.query_params.get('status')
+        file_id = request.query_params.get('file_id')
+        shares = FileShareService.list_user_shares(request.user, search_term, status_filter, file_id)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(shares, request)
+        if page is not None:
+            serializer = SharedLinkSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+            
+        serializer = SharedLinkSerializer(shares, many=True)
+        return Response(serializer.data)
+
+class RevokeSharedLinkView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, token):
+        success, message = FileShareService.revoke_shared_link(token, request.user)
+        if not success:
+            return Response({"error": message}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"message": message}, status=status.HTTP_200_OK)
+
     
 class PublicFileView(APIView):
     permission_classes = [AllowAny]
@@ -411,4 +438,15 @@ class PublicFileView(APIView):
         response = FileResponse(file_handle, content_type=file_obj.mime_type)
         response['Content-Disposition'] = f'inline; filename="{file_obj.filename}"'
         
+        return response
+
+    def head(self, request, token):
+        file_obj, error = FileShareService.get_file_from_token(token)
+        if error:
+            return Response({"error": error}, status=status.HTTP_404_NOT_FOUND)
+        
+        from django.http import HttpResponse
+        response = HttpResponse(content_type=file_obj.mime_type)
+        response['Content-Length'] = file_obj.content.size
+        response['Content-Disposition'] = f'inline; filename="{file_obj.filename}"'
         return response
