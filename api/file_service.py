@@ -1,4 +1,5 @@
-# SERVICES FRO FILE UPLOAD DOWNLOAD.
+# SERVICES FOR FILE UPLOAD DOWNLOAD.
+import hashlib
 from rest_framework.exceptions import ValidationError
 from django.conf import settings
 from .models import UserFile, SharedLink
@@ -38,30 +39,121 @@ class FileStorageService:
         return queryset.order_by('-uploaded_at')
 
     @staticmethod
-    def process_and_store_file(user, file_obj,display_name,description):
+    def get_deleted_files(user):
         """
-        api : api/files/upload/
-        Upload the file
+        Returns all soft-deleted files for the user, ordered by deletion timestamp (newest first).
         """
-        if file_obj.size > settings.MAX_UPLOAD_SIZE:
-            max_mb = settings.MAX_UPLOAD_SIZE
-            raise ValidationError(f"File exceeds {max_mb}MB limit.")
-        mime_type = file_obj.content_type or 'application/octet-stream'
-        ALLOWED_TYPES = [
-            'image/jpeg', 'image/png', 'application/pdf', 
-            'video/mp4', 'text/plain'
-        ]
+        return UserFile.objects.filter(
+            owner=user, 
+            is_deleted=True
+        ).order_by('-deleted_at')
 
-        if mime_type not in ALLOWED_TYPES:
-            raise ValidationError(f"File type {mime_type} is not supported.")
+    ALLOWED_TYPES = {
+        'image/jpeg',
+        'image/png',
+        'application/pdf',
+        'video/mp4',
+        'text/plain'
+    }
+
+    @staticmethod
+    def compute_checksum(file_obj, chunk_size=8192):
+        """
+        Compute SHA-256 checksum without loading entire file into memory.
+        """
+        sha256 = hashlib.sha256()
+
+        file_obj.seek(0)
+        for chunk in iter(lambda: file_obj.read(chunk_size), b''):
+            sha256.update(chunk)
+        file_obj.seek(0)
+
+        return sha256.hexdigest()
+
+    @staticmethod
+    def validate_file(file_obj):
+        """
+        Validate file size and MIME type.
+        """
+        # Size validation
+        if file_obj.size > settings.MAX_UPLOAD_SIZE:
+            max_mb = settings.MAX_UPLOAD_SIZE / (1024 * 1024)
+            raise ValidationError(f"File exceeds {max_mb:.2f} MB limit.")
+
+        # MIME validation (basic - header based)
+        mime_type = file_obj.content_type or 'application/octet-stream'
+        if mime_type not in FileStorageService.ALLOWED_TYPES:
+            raise ValidationError(f"File type '{mime_type}' is not supported.")
+
+        return mime_type
+
+    @staticmethod
+    def check_duplicate(checksum, user):
+        """
+        Check if a non-deleted file with the same checksum exists for this user.
+        Soft-deleted files are intentionally excluded so that re-uploading a
+        trashed file always succeeds.
+        """
+        return UserFile.objects.filter(
+            owner=user,
+            checksum=checksum,
+            is_deleted=False
+        ).first()
+
+    @staticmethod
+    def _resolve_duplicate_filename(base_name, user):
+        import os
+        stem, ext = os.path.splitext(base_name)   # ('report', '.pdf')
+        # Count active files whose filename matches <stem>(<N>)<ext> or <stem><ext>
+        existing_count = UserFile.objects.filter(
+            owner=user,
+            is_deleted=False,
+            filename__startswith=stem,
+        ).count()
+
+        if existing_count == 0:
+            return base_name
+        return f"{stem}({existing_count}){ext}"
+
+    @staticmethod
+    def process_and_store_file(user, file_obj, display_name=None, description=None):
+        """
+        Main upload handler:
+        - validates file
+        - computes checksum
+        - checks for active duplicates and renames if needed
+        - always stores a new record (never silently returns an existing one)
+
+        Duplicate naming pattern:  report.pdf → report(1).pdf → report(2).pdf …
+        Soft-deleted files are ignored so re-uploading a trashed file works.
+        """
+
+        # Step 1: Validate
+        mime_type = FileStorageService.validate_file(file_obj)
+
+        # Step 2: Compute checksum
+        checksum = FileStorageService.compute_checksum(file_obj)
+
+        # Step 3: Determine final filename
+        # If an active non-deleted file with the same checksum exists, rename.
+        existing_file = FileStorageService.check_duplicate(checksum, user)
+        if existing_file:
+            resolved_filename = FileStorageService._resolve_duplicate_filename(
+                file_obj.name, user
+            )
+        else:
+            resolved_filename = file_obj.name
+
+        # Step 4: Save file (always create a new record)
         return UserFile.objects.create(
             owner=user,
             content=file_obj,
-            filename=file_obj.name,
-            display_name=display_name,
+            filename=resolved_filename,
+            display_name=display_name or resolved_filename,
             description=description,
             file_size_bytes=file_obj.size,
-            mime_type=mime_type
+            mime_type=mime_type,
+            checksum=checksum
         )
     
     @staticmethod
@@ -88,9 +180,11 @@ class FileStorageService:
     @staticmethod
     def soft_delete_file(user, file_instance):
         """
-        Toggles the favorite status for a specific user and file.
+        Marks the file as deleted and records the deletion timestamp.
         """
+        from django.utils import timezone
         file_instance.is_deleted = True
+        file_instance.deleted_at = timezone.now()
         file_instance.save()
         return file_instance
     
@@ -105,9 +199,10 @@ class FileStorageService:
     @staticmethod
     def restore_file(user, file_instance):
         """
-        Toggles the favorite status for a specific user and file.
+        Restores a soft-deleted file and clears its deletion timestamp.
         """
         file_instance.is_deleted = False
+        file_instance.deleted_at = None
         file_instance.save()
         return file_instance
 
@@ -115,9 +210,12 @@ class FileStorageService:
     @staticmethod
     def restore_all_files(user):
         """
-        Restores all files marked as deleted for the given user.
+        Restores all files marked as deleted for the given user and clears their deletion timestamps.
         """
-        updated_count = UserFile.objects.filter(owner=user, is_deleted=True).update(is_deleted=False)
+        updated_count = UserFile.objects.filter(owner=user, is_deleted=True).update(
+            is_deleted=False,
+            deleted_at=None
+        )
         return updated_count
 
     @staticmethod

@@ -250,7 +250,7 @@ class RestoreFileView(APIView):
     
 class TrashView(APIView):
     def get(self,request):
-        files = UserFile.objects.filter(owner=request.user,is_deleted=True)
+        files = UserFile.objects.filter(owner=request.user, is_deleted=True).order_by('-deleted_at')
         
         paginator = StandardPagination()
         page = paginator.paginate_queryset(files, request)

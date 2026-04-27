@@ -42,9 +42,11 @@ class UserFile(models.Model):
     file_size_bytes = models.BigIntegerField()
     filename = models.CharField(max_length=255)
     mime_type = models.CharField(max_length=100, editable=False)
+    checksum = models.CharField(max_length=64, null=True, blank=True, db_index=True, help_text="SHA-256 hex digest of the file content")
     uploaded_at = models.DateTimeField(auto_now_add=True, db_index=True)
     description=models.CharField(max_length=250, null=True)
     is_deleted=models.BooleanField(default=False)
+    deleted_at=models.DateTimeField(null=True, blank=True)
     
     class Meta:
         db_table = "Files"
