@@ -327,10 +327,10 @@ class FolderUpdateView(APIView):
 
 class FolderDeleteView(APIView):
     def delete(self,request,folder_id):
-        soft_delete_file = FolderService.delete_folder(request.user, folder_id)
+        FolderService.delete_folder(request.user, folder_id)
         return Response({
             "status": "success",
-            "message": "File Restored Sucessfully"
+            "message": "Folder deleted successfully"
         }, status=status.HTTP_200_OK)
 
          
