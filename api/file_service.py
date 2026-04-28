@@ -248,7 +248,18 @@ class FileStorageService:
         shares_qs = SharedLink.objects.filter(
             file__owner=user,
             created_at__range=(start_date, end_date)
-        ).select_related('file').only('token', 'file__display_name', 'file__filename', 'receipient_email', 'created_at', 'file_id').order_by('-created_at')
+        ).select_related('file').only(
+            'token', 
+            'file__display_name', 
+            'file__filename', 
+            'file__file_size_bytes',
+            'receipient_email', 
+            'created_at', 
+            'expires_at',
+            'is_revoked',
+            'message',
+            'file_id'
+        ).order_by('-created_at')
 
         # 4. Global Stats
         total_uploads = UserFile.objects.filter(owner=user, is_deleted=False).count()
@@ -276,9 +287,15 @@ class FileStorageService:
             history[day].append({
                 "type": "share",
                 "file_id": str(s.file_id),
-                "name": s.file.display_name or s.file.filename,
-                "recipient": s.receipient_email or "Public Link",
+                "file_name": s.file.display_name or s.file.filename,
+                "recipient_email": s.receipient_email or "Public Link",
                 "time": local_time.strftime("%H:%M"),
+                "created_at": s.created_at.isoformat(),
+                "expires_at": s.expires_at.isoformat(),
+                "is_revoked": s.is_revoked,
+                "is_expired": s.is_expired,
+                "message": s.message,
+                "file_size_bytes": s.file.file_size_bytes
             })
 
         # Sort daily events by time descending
