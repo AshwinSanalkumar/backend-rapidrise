@@ -23,7 +23,7 @@ class FolderService:
 
     @staticmethod
     def update_folder(user, folder_id, name):
-        if UserFolder.objects.filter(owner=user, name__iexact=name).exists():
+        if UserFolder.objects.filter(owner=user, name__iexact=name).exclude(id=folder_id).exists():
             raise ValidationError(f"A folder named '{name}' already exists.")
         folder = get_object_or_404(UserFolder, id=folder_id, owner=user)
         folder.name = name
