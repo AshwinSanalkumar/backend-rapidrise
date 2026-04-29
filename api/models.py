@@ -47,6 +47,7 @@ class UserFile(models.Model):
     description=models.CharField(max_length=250, null=True)
     is_deleted=models.BooleanField(default=False)
     deleted_at=models.DateTimeField(null=True, blank=True)
+    last_accessed_at=models.DateTimeField(null=True, blank=True, db_index=True, help_text="Timestamp of the last time the owner opened/viewed this file")
     
     class Meta:
         db_table = "Files"

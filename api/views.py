@@ -142,9 +142,9 @@ class FileDetailView(APIView):
         """
         GET api/files/<file_id>/
         Returns metadata for a specific file owned by the user.
+        Also stamps last_accessed_at so the Recents feed stays accurate.
         """
         try:
-            # Ensure the ID is a valid UUID before hitting the database
             file_uuid = UUID(file_id)
         except (ValueError, TypeError):
             return Response(
@@ -152,9 +152,12 @@ class FileDetailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Security: owner=request.user prevents users from seeing each other's metadata
         user_file = get_object_or_404(UserFile, pk=file_uuid, owner=request.user)
-        
+
+        # Stamp access time (only update that one column for efficiency)
+        UserFile.objects.filter(pk=file_uuid).update(last_accessed_at=timezone.now())
+        user_file.refresh_from_db()
+
         serializer = UserFileSerializer(user_file)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -198,6 +201,31 @@ class FavoritesView(APIView):
             "message": "File marked as favorite" if updated_file.is_favorite else "File removed from favorites"
         }, status=status.HTTP_200_OK)
     
+
+class RecentFilesView(APIView):
+    permission_classes = [IsAuthenticated]
+    """
+    api: api/files/recents/
+    Returns the user's files that have been accessed at least once,
+    ordered by last_accessed_at descending (most recently opened first).
+    Falls back to uploaded_at for files never explicitly accessed.
+    """
+    def get(self, request):
+        files = UserFile.objects.filter(
+            owner=request.user,
+            is_deleted=False,
+            last_accessed_at__isnull=False   # only files that have been opened
+        ).order_by('-last_accessed_at')
+
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(files, request)
+        if page is not None:
+            serializer = UserFileSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = UserFileSerializer(files, many=True)
+        return Response(serializer.data)
+
 
 class UploadHistoryView(APIView):
     permission_classes = [IsAuthenticated]

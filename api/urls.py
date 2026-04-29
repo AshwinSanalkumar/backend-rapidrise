@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import PublicFileView, RegisterView, FileUploadView, FileListView,FolderDeleteView,CreateSharedLinkView,RevokeSharedLinkView,ListSharedLinksView,FolderUpdateView ,FolderContentUploadView,FolderContentDeleteView ,TrashView,RestoreFileView, RestoreAllFilesView,EmptyTrashView,FavoritesView,SoftDeleteFile,FileDetailView,FileUpdateView,CookieTokenObtainPairView,CookieTokenRefreshView, LogoutView, FolderCreateView,FolderListView,FolderContentView,HardDeleteView ,UploadHistoryView
+from .views import PublicFileView, RegisterView, FileUploadView, FileListView,FolderDeleteView,CreateSharedLinkView,RevokeSharedLinkView,ListSharedLinksView,FolderUpdateView ,FolderContentUploadView,FolderContentDeleteView ,TrashView,RestoreFileView, RestoreAllFilesView,EmptyTrashView,FavoritesView,SoftDeleteFile,FileDetailView,FileUpdateView,CookieTokenObtainPairView,CookieTokenRefreshView, LogoutView, FolderCreateView,FolderListView,FolderContentView,HardDeleteView ,UploadHistoryView, RecentFilesView
 
 
 urlpatterns = [
@@ -13,6 +13,7 @@ urlpatterns = [
     path('files/view/<str:file_id>/', FileDetailView.as_view(), name='file-detail-view'),
     path('files/favorite/<str:file_id>/', FavoritesView.as_view(), name='add-favorites'),
     path('files/list/', FileListView.as_view(), name='file-list'),
+    path('files/recents/', RecentFilesView.as_view(), name='file-recents'),
     path('files/update/<str:file_id>/', FileUpdateView.as_view(), name='product-update'),
     path('files/history/', UploadHistoryView.as_view(), name='file-history'),
 
