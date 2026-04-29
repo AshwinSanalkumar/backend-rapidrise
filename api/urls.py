@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import PublicFileView, RegisterView, FileUploadView, FileListView,FolderDeleteView,CreateSharedLinkView,RevokeSharedLinkView,ListSharedLinksView,FolderUpdateView ,FolderContentUploadView,FolderContentDeleteView ,TrashView,RestoreFileView, RestoreAllFilesView,EmptyTrashView,FavoritesView,SoftDeleteFile,FileDetailView,FileUpdateView,CookieTokenObtainPairView,CookieTokenRefreshView, LogoutView, FolderCreateView,FolderListView,FolderContentView,HardDeleteView ,UploadHistoryView, RecentFilesView
+from .views import PublicFileView, RegisterView, FileUploadView, FileListView,FolderDeleteView,CreateSharedLinkView,RevokeSharedLinkView,ListSharedLinksView,FolderUpdateView ,FolderContentUploadView,FolderContentDeleteView ,TrashView,RestoreFileView, RestoreAllFilesView,EmptyTrashView,FavoritesView,SoftDeleteFile,FileDetailView,FileUpdateView,CookieTokenObtainPairView,CookieTokenRefreshView, LogoutView, FolderCreateView,FolderListView,FolderContentView,HardDeleteView ,UploadHistoryView, RecentFilesView, UserDetailView, DuplicateFilesView
 
 
 urlpatterns = [
@@ -8,6 +8,7 @@ urlpatterns = [
     path('login/',CookieTokenObtainPairView.as_view(),name='login'),
     path('refresh/',CookieTokenRefreshView.as_view(),name='login'), 
     path('logout/', LogoutView.as_view(),name="login"),
+    path('user/', UserDetailView.as_view(), name='user-detail'),
 
     path('files/upload/', FileUploadView.as_view(), name='file-upload'),
     path('files/view/<str:file_id>/', FileDetailView.as_view(), name='file-detail-view'),
@@ -37,5 +38,6 @@ urlpatterns = [
     path('files/shared-links/', ListSharedLinksView.as_view(), name='list-shared-links'),
     path('files/share/revoke/<str:token>/', RevokeSharedLinkView.as_view(), name='revoke-share-link'),
     path('file/shared/<str:token>/', PublicFileView.as_view(), name='shared-file'),
+    path('storage/duplicates/', DuplicateFilesView.as_view(), name='duplicate-files'),
 
 ]

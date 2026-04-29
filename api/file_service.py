@@ -12,6 +12,7 @@ from django.utils.timezone import make_aware
 from datetime import timedelta
 from django.urls import reverse
 from django.core.mail import EmailMessage
+from django.db import transaction
 
 
 class FileStorageService:
@@ -101,18 +102,27 @@ class FileStorageService:
         ).first()
 
     @staticmethod
-    def _resolve_duplicate_filename(base_name, user):
+    def resolve_filename(base_name, user, checksum):
+        """
+        Ensures a unique filename for the user.
+        Renames if:
+        1. A file with the same name already exists.
+        2. A file with the same content (checksum) already exists.
+        """
         import os
-        stem, ext = os.path.splitext(base_name)   # ('report', '.pdf')
-        # Count active files whose filename matches <stem>(<N>)<ext> or <stem><ext>
+        name_exists = UserFile.objects.filter(owner=user, filename=base_name, is_deleted=False).exists()
+        checksum_exists = FileStorageService.check_duplicate(checksum, user)
+
+        if not (name_exists or checksum_exists):
+            return base_name
+
+        stem, ext = os.path.splitext(base_name)
         existing_count = UserFile.objects.filter(
             owner=user,
             is_deleted=False,
             filename__startswith=stem,
         ).count()
 
-        if existing_count == 0:
-            return base_name
         return f"{stem}({existing_count}){ext}"
 
     @staticmethod
@@ -122,39 +132,42 @@ class FileStorageService:
         - validates file
         - computes checksum
         - checks for active duplicates and renames if needed
-        - always stores a new record (never silently returns an existing one)
-
-        Duplicate naming pattern:  report.pdf → report(1).pdf → report(2).pdf …
-        Soft-deleted files are ignored so re-uploading a trashed file works.
+        - always stores a new record
         """
+        with transaction.atomic():
+            from .models import User
+            user_locked = User.objects.select_for_update().get(pk=user.pk)
 
-        # Step 1: Validate
-        mime_type = FileStorageService.validate_file(file_obj)
+            if user_locked.consumed_storage + file_obj.size > user_locked.storage_limit_bytes:
+                raise ValidationError("Storage limit exceeded. Please clean up your vault.")
 
-        # Step 2: Compute checksum
-        checksum = FileStorageService.compute_checksum(file_obj)
+            mime_type = FileStorageService.validate_file(file_obj)
 
-        # Step 3: Determine final filename
-        # If an active non-deleted file with the same checksum exists, rename.
-        existing_file = FileStorageService.check_duplicate(checksum, user)
-        if existing_file:
-            resolved_filename = FileStorageService._resolve_duplicate_filename(
-                file_obj.name, user
+            # Important: compute_checksum reads the stream
+            checksum = FileStorageService.compute_checksum(file_obj)
+            file_obj.seek(0)  # Reset pointer for saving
+
+            resolved_filename = FileStorageService.resolve_filename(
+                file_obj.name,
+                user_locked,
+                checksum
             )
-        else:
-            resolved_filename = file_obj.name
 
-        # Step 4: Save file (always create a new record)
-        return UserFile.objects.create(
-            owner=user,
-            content=file_obj,
-            filename=resolved_filename,
-            display_name=display_name or resolved_filename,
-            description=description,
-            file_size_bytes=file_obj.size,
-            mime_type=mime_type,
-            checksum=checksum
-        )
+            new_file = UserFile.objects.create(
+                owner=user_locked,
+                content=file_obj,
+                filename=resolved_filename,
+                display_name=display_name or resolved_filename,
+                description=description,
+                file_size_bytes=file_obj.size,
+                mime_type=mime_type,
+                checksum=checksum
+            )
+            
+            user_locked.consumed_storage += file_obj.size
+            user_locked.save(update_fields=['consumed_storage'])
+            
+            return new_file
     
     @staticmethod
     def update_file(file, data):
@@ -191,10 +204,21 @@ class FileStorageService:
     @staticmethod
     def hard_delete_file(file_instance):
         """
-        Toggles the favorite status for a specific user and file.
+        Permanently deletes the file and updates user consumption.
+        Ensures atomicity and prevents race conditions during consumption updates.
         """
-        file_instance.delete()
-        return None
+        with transaction.atomic():
+            from .models import User
+            size = file_instance.file_size_bytes
+            owner_locked = User.objects.select_for_update().get(pk=file_instance.owner.pk)
+            
+            file_instance.delete()
+            
+            # Update consumption on the locked user record
+            owner_locked.consumed_storage = max(0, owner_locked.consumed_storage - size)
+            owner_locked.save(update_fields=['consumed_storage'])
+            
+            return None
     
     @staticmethod
     def restore_file(user, file_instance):
@@ -370,5 +394,48 @@ class FileStorageService:
             "expires_at": shared_link.expires_at,
             "sent_to": emails if emails else []
         }
+
+    @staticmethod
+    def get_duplicate_groups(user):
+        """
+        Finds files with the same checksum for a user.
+        Groups them and returns group details.
+        """
+        # Find checksums that have more than one non-deleted file
+        duplicate_checksums = UserFile.objects.filter(
+            owner=user, 
+            is_deleted=False, 
+            checksum__isnull=False
+        ).values('checksum').annotate(count=Count('id')).filter(count__gt=1)
+
+        result = []
+        for item in duplicate_checksums:
+            checksum = item['checksum']
+            files = UserFile.objects.filter(
+                owner=user, 
+                is_deleted=False, 
+                checksum=checksum
+            ).order_by('uploaded_at') # First one is treated as "original"
+
+            files_data = []
+            for i, f in enumerate(files):
+                files_data.append({
+                    "id": str(f.id),
+                    "filename": f.display_name or f.filename,
+                    "path": f.filename,
+                    "date": f.uploaded_at.strftime("%b %d, %Y"),
+                    "size_bytes": f.file_size_bytes,
+                    "isOriginal": i == 0
+                })
+
+            result.append({
+                "checksum": checksum,
+                "fileName": files[0].display_name or files[0].filename,
+                "size": f"{files[0].file_size_bytes / (1024*1024):.2f} MB",
+                "total_size_bytes": files[0].file_size_bytes,
+                "instances": files_data
+            })
+        
+        return result
 
     

@@ -1,7 +1,18 @@
 from rest_framework import serializers
 from .models import User
 import re
-from .models import UserFile, UserFolder, SharedLink
+from .models import User, UserFile, UserFolder, SharedLink
+
+class UserSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'first_name', 'last_name', 'full_name', 'consumed_storage', 'storage_limit_bytes']
+        read_only_fields = ['id', 'email', 'full_name', 'consumed_storage', 'storage_limit_bytes']
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
 
 class RegistrationSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)

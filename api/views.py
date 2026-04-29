@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import RegistrationSerializer,UserFileSerializer, FolderSerializer, SharedLinkSerializer
+from .serializers import RegistrationSerializer,UserFileSerializer, FolderSerializer, SharedLinkSerializer, UserSerializer
 from .auth_service import AuthenticationService
 from .file_service import FileStorageService
 from .folder_service import FolderService
@@ -86,6 +86,12 @@ class LogoutView(APIView):
         response.delete_cookie('access_token')
         response.delete_cookie('refresh_token')
         return response
+
+class UserDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
 
 #---------------------------------------------------------------------------------------------
 #FILE MANAGEMENT VIEWS
@@ -478,3 +484,36 @@ class PublicFileView(APIView):
         response['Content-Length'] = file_obj.content.size
         response['Content-Disposition'] = f'inline; filename="{file_obj.filename}"'
         return response
+
+class DuplicateFilesView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """List all duplicate groups for the current user."""
+        duplicates = FileStorageService.get_duplicate_groups(request.user)
+        return Response(duplicates, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        """
+        Resolve duplicates by deleting specific file IDs.
+        Expected format: {'file_ids': [uuid, uuid, ...]}
+        """
+        file_ids = request.data.get('file_ids', [])
+        if not file_ids:
+            return Response({"error": "No file IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        deleted_count = 0
+        for fid in file_ids:
+            try:
+                # Use existing service method for hard deletion (decrements quota)
+                file_obj = get_object_or_404(UserFile, id=fid, owner=request.user)
+                FileStorageService.hard_delete_file(file_obj)
+                deleted_count += 1
+            except Exception:
+                continue
+                
+        return Response({
+            "status": "success",
+            "message": f"Successfully removed {deleted_count} duplicates",
+            "deleted_count": deleted_count
+        }, status=status.HTTP_200_OK)

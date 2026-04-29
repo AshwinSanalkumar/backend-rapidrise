@@ -25,6 +25,8 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     dob = models.DateField()
     objects = UserManager()
+    storage_limit_bytes = models.BigIntegerField(default=1024*1024*1024) 
+    consumed_storage = models.BigIntegerField(default=0)
 
     USERNAME_FIELD='email'
     REQUIRED_FIELDS = ["first_name", "last_name"]
