@@ -128,3 +128,14 @@ class WorkstationInvite(models.Model):
 
     class Meta:
         db_table = "WorkstationInvites"
+
+class WorkstationVersion(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workstation = models.ForeignKey(Workstation, on_delete=models.CASCADE, related_name='versions')
+    content = models.TextField(blank=True, default="")
+    saved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='workstation_versions')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "WorkstationVersions"
+        ordering = ['-created_at']

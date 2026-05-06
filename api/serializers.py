@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import User
 import re
-from .models import User, UserFile, UserFolder, SharedLink, Workstation, WorkstationMember, WorkstationInvite
+from .models import User, UserFile, UserFolder, SharedLink, Workstation, WorkstationMember, WorkstationInvite, WorkstationVersion
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
@@ -150,3 +150,17 @@ class UserSearchSerializer(serializers.ModelSerializer):
 
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}"
+
+class WorkstationVersionSerializer(serializers.ModelSerializer):
+    saved_by_name = serializers.SerializerMethodField()
+    saved_by_email = serializers.EmailField(source='saved_by.email', read_only=True)
+
+    class Meta:
+        model = WorkstationVersion
+        fields = ['id', 'workstation', 'content', 'saved_by', 'saved_by_name', 'saved_by_email', 'created_at']
+        read_only_fields = ['id', 'workstation', 'saved_by', 'created_at']
+
+    def get_saved_by_name(self, obj):
+        if obj.saved_by:
+            return f"{obj.saved_by.first_name} {obj.saved_by.last_name}"
+        return "Unknown"

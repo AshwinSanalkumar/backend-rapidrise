@@ -8,7 +8,8 @@ from .views import (
     FolderCreateView, FolderListView, FolderContentView, HardDeleteView, UploadHistoryView, 
     RecentFilesView, UserDetailView, DuplicateFilesView,
     WorkstationListView, WorkstationDetailView, UserSearchView, 
-    WorkstationInviteView, WorkstationInviteRespondView, WorkstationExportView
+    WorkstationInviteView, WorkstationInviteRespondView, WorkstationExportView,
+    WorkstationVersionsView, WorkstationVersionRestoreView, WorkstationVersionDeleteView
 )
 
 urlpatterns = [
@@ -61,4 +62,7 @@ urlpatterns = [
     path('workstations/invites/', WorkstationInviteView.as_view(), name='workstation-invites'),
     path('workstations/invites/<int:invite_id>/respond/', WorkstationInviteRespondView.as_view(), name='workstation-invite-respond'),
     path('workstations/<uuid:workstation_id>/export/', WorkstationExportView.as_view(), name='workstation-export'),
+    path('workstations/<uuid:workstation_id>/versions/', WorkstationVersionsView.as_view(), name='workstation-versions'),
+    path('workstations/<uuid:workstation_id>/versions/<uuid:version_id>/restore/', WorkstationVersionRestoreView.as_view(), name='workstation-version-restore'),
+    path('workstations/<uuid:workstation_id>/versions/<uuid:version_id>/delete/', WorkstationVersionDeleteView.as_view(), name='workstation-version-delete'),
 ]

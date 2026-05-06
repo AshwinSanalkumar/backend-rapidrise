@@ -4,7 +4,7 @@ from rest_framework import status
 from .serializers import (
     RegistrationSerializer, UserFileSerializer, FolderSerializer, 
     SharedLinkSerializer, UserSerializer, WorkstationSerializer,
-    WorkstationInviteSerializer, UserSearchSerializer
+    WorkstationInviteSerializer, UserSearchSerializer, WorkstationVersionSerializer
 )
 from .auth_service import AuthenticationService
 from .file_service import FileStorageService
@@ -595,6 +595,43 @@ class WorkstationInviteRespondView(APIView):
                 request.data.get('action')
             )
             return Response(result)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class WorkstationVersionsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, workstation_id):
+        try:
+            versions = WorkstationService.get_versions(request.user, workstation_id)
+            serializer = WorkstationVersionSerializer(versions, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class WorkstationVersionRestoreView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, workstation_id, version_id):
+        try:
+            workstation = WorkstationService.restore_version(request.user, workstation_id, version_id)
+            serializer = WorkstationSerializer(workstation)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class WorkstationVersionDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, workstation_id, version_id):
+        try:
+            workstation, rolled_back = WorkstationService.delete_version(request.user, workstation_id, version_id)
+            return Response({
+                "rolled_back": rolled_back,
+                "workstation": WorkstationSerializer(workstation).data
+            }, status=status.HTTP_200_OK)
+        except PermissionError as e:
+            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

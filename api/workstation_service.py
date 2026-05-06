@@ -1,8 +1,8 @@
 from django.shortcuts import get_object_or_404
 from django.db import models
 from django.contrib.auth import get_user_model
-from .models import Workstation, WorkstationMember, WorkstationInvite
-from .serializers import WorkstationSerializer, WorkstationInviteSerializer, UserSearchSerializer
+from .models import Workstation, WorkstationMember, WorkstationInvite, WorkstationVersion
+from .serializers import WorkstationSerializer, WorkstationInviteSerializer, UserSearchSerializer, WorkstationVersionSerializer
 
 User = get_user_model()
 
@@ -44,7 +44,79 @@ class WorkstationService:
         serializer = WorkstationSerializer(workstation, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+
+        if 'content' in data:
+            WorkstationVersion.objects.create(
+                workstation=workstation,
+                content=data['content'],
+                saved_by=user
+            )
+
         return workstation
+
+    @staticmethod
+    def get_versions(user, workstation_id):
+        """Get all versions for a workstation."""
+        workstation = get_object_or_404(
+            Workstation, 
+            id=workstation_id, 
+            members__user=user
+        )
+        return workstation.versions.all()
+
+    @staticmethod
+    def restore_version(user, workstation_id, version_id):
+        """Restore a workstation to a specific version."""
+        workstation = get_object_or_404(
+            Workstation, 
+            id=workstation_id, 
+            members__user=user,
+            members__role__in=['OWNER', 'EDITOR']
+        )
+        version = get_object_or_404(WorkstationVersion, id=version_id, workstation=workstation)
+        
+        workstation.content = version.content
+        workstation.save()
+
+        WorkstationVersion.objects.create(
+            workstation=workstation,
+            content=workstation.content,
+            saved_by=user
+        )
+        return workstation
+
+    @staticmethod
+    def delete_version(user, workstation_id, version_id):
+        """Delete a version. Only the workstation owner or the version author may delete.
+        If the deleted version is the latest, the workstation is rolled back to the previous one."""
+        workstation = get_object_or_404(
+            Workstation,
+            id=workstation_id,
+            members__user=user
+        )
+        version = get_object_or_404(WorkstationVersion, id=version_id, workstation=workstation)
+
+        is_workstation_owner = workstation.owner == user
+        is_version_author = version.saved_by == user
+
+        if not (is_workstation_owner or is_version_author):
+            raise PermissionError("You do not have permission to delete this version.")
+
+        # Check if this is the most recent version before deleting
+        latest = workstation.versions.order_by('-created_at').first()
+        is_latest = latest and latest.id == version.id
+
+        version.delete()
+
+        rolled_back = False
+        if is_latest:
+            # Promote the new latest version to the workstation's live content
+            new_latest = workstation.versions.order_by('-created_at').first()
+            workstation.content = new_latest.content if new_latest else ""
+            workstation.save()
+            rolled_back = True
+
+        return workstation, rolled_back
 
     @staticmethod
     def delete_workstation(user, workstation_id):
