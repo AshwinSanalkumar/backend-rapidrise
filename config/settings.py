@@ -50,8 +50,11 @@ INSTALLED_APPS = [
 ASGI_APPLICATION = 'config.asgi.application'
 
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": ["redis://:A2WHz3JAZJnKP0wgfLsibA4C447NbaYG@redis-11512.c44.us-east-1-2.ec2.cloud.redislabs.com:11512/0"],
+        },
     },
 }
 
