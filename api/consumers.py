@@ -1,16 +1,10 @@
 import json
-import base64
-import asyncio
-import redis
-import os
 from django.db.models import Q
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from .models import Workstation, WorkstationMember
+from .models import Workstation
 
 class WorkstationConsumer(AsyncWebsocketConsumer):
-    # Class-level state to track workstations that need saving
-    _save_locks = set()
 
     async def connect(self):
         self.workstation_id = self.scope['url_route']['kwargs']['workstation_id']
@@ -29,15 +23,16 @@ class WorkstationConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
-        # ✅ send initial DB content
+        # Send initial DB content to gracefully resume state
         workstation = await self.get_workstation()
         if workstation and workstation.content:
-            # We only send if content is not Yjs binary (avoiding confusion)
+            # We only send if content is not Yjs binary (avoiding confusion for older text clients)
             if not workstation.content.startswith('yjs:'):
                 await self.send(text_data=json.dumps({
                     "type": "initial_content",
                     "content": workstation.content
                 }))
+
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(
@@ -57,6 +52,7 @@ class WorkstationConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data=None, bytes_data=None):
         if bytes_data:
+            # Broadcast bytes to group instantly (Y-Websocket sync packets)
             await self.channel_layer.group_send(
                 self.group_name,
                 {
@@ -87,48 +83,3 @@ class WorkstationConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_workstation(self):
         return Workstation.objects.filter(id=self.workstation_id).first()
-
-    async def append_update(self, update_data):
-        self.redis.rpush(self.redis_key, update_data)
-        await self.schedule_db_save()
-
-    async def get_full_state(self):
-        updates = self.redis.lrange(self.redis_key, 0, -1)
-        
-        if not updates:
-            db_state_b64 = await self.get_db_state()
-            if db_state_b64:
-                full_state = base64.b64decode(db_state_b64.replace('yjs:', '', 1))
-                self.redis.rpush(self.redis_key, full_state)
-                return full_state
-            return None
-            
-        return b''.join(updates)
-
-    @database_sync_to_async
-    def get_db_state(self):
-        try:
-            ws = Workstation.objects.get(id=self.workstation_id)
-            return ws.content if ws.content.startswith('yjs:') else None
-        except Workstation.DoesNotExist:
-            return None
-
-    async def schedule_db_save(self):
-        if self.workstation_id not in WorkstationConsumer._save_locks:
-            WorkstationConsumer._save_locks.add(self.workstation_id)
-            # Debounce: wait 5 seconds before saving to DB
-            asyncio.create_task(self.deferred_save())
-
-    async def deferred_save(self):
-        await asyncio.sleep(5)
-        try:
-            state = await self.get_full_state()
-            if state:
-                state_b64 = "yjs:" + base64.b64encode(state).decode('utf-8')
-                await self.update_workstation_content(state_b64)
-        finally:
-            WorkstationConsumer._save_locks.remove(self.workstation_id)
-
-    @database_sync_to_async
-    def update_workstation_content(self, content):
-        Workstation.objects.filter(id=self.workstation_id).update(content=content)
