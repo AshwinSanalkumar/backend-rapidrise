@@ -22,7 +22,9 @@ from django.utils import timezone
 from django.http import FileResponse
 from rest_framework.pagination import PageNumberPagination
 
+
 class StandardPagination(PageNumberPagination):
+    page_size = 8
     page_size_query_param = 'page_size'
     max_page_size = 100
 
@@ -97,6 +99,66 @@ class UserDetailView(APIView):
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+class ForgotPasswordView(APIView):
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+
+        email = request.data.get("email")
+
+        if not email:
+            return Response(
+                {"error": "Email is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        AuthenticationService.send_reset_email(email)
+
+        return Response(
+            {
+                "message":
+                "If an account exists, a reset link has been sent."
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class ResetPasswordView(APIView):
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, uidb64, token):
+
+        password = request.data.get("password")
+
+        if not password:
+            return Response(
+                {"error": "Password is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        success, message = (
+            AuthenticationService.reset_password(
+                uidb64,
+                token,
+                password
+            )
+        )
+
+        if not success:
+            return Response(
+                {"error": message},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return Response(
+            {"message": message},
+            status=status.HTTP_200_OK
+        )
 
 #---------------------------------------------------------------------------------------------
 #FILE MANAGEMENT VIEWS
@@ -521,6 +583,57 @@ class DuplicateFilesView(APIView):
             "message": f"Successfully removed {deleted_count} duplicates",
             "deleted_count": deleted_count
         }, status=status.HTTP_200_OK)
+
+class StorageStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """Returns storage distribution statistics."""
+        stats = FileStorageService.get_storage_stats(request.user)
+        return Response(stats, status=status.HTTP_200_OK)
+
+class LargeFilesView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """Returns a list of large files, optionally filtered by category."""
+        category = request.query_params.get('category')
+        files = FileStorageService.get_large_files(request.user, category=category)
+        
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(files, request)
+        if page is not None:
+             serializer = UserFileSerializer(page, many=True)
+             return paginator.get_paginated_response(serializer.data)
+
+        # We can reuse UserFileSerializer here
+        serializer = UserFileSerializer(files, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+class StorageTrendsView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """Returns historical storage usage snapshots and activity trends."""
+        trends = FileStorageService.get_storage_snapshots(request.user)
+        activity = FileStorageService.get_activity_snapshots(request.user)
+        return Response({
+            "monthly": trends,
+            "daily": activity['daily'],
+            "weekly": activity['weekly']
+        }, status=status.HTTP_200_OK)
+
+class CleanupDuplicatesView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        """Batch cleanup all duplicates, keeping only originals."""
+        count = FileStorageService.cleanup_duplicates(request.user)
+        return Response({
+            "message": f"Successfully removed {count} duplicate instances.",
+            "deleted_count": count
+        }, status=status.HTTP_200_OK)
+
 
 from .workstation_service import WorkstationService
 

@@ -187,3 +187,5 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 # The default 'From' address for system-generated emails
 DEFAULT_FROM_EMAIL = 'NexusShare <no-reply@yourdomain.com>'
 FRONTEND_URL = "http://localhost:5173"
+
+PASSWORD_RESET_TIMEOUT = 600

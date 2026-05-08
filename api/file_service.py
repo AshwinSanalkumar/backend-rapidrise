@@ -16,6 +16,28 @@ from django.db import transaction
 
 
 class FileStorageService:
+    IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    DOC_TYPES = [
+        'application/pdf', 
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+        'text/plain'
+    ]
+    MEDIA_TYPES = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/wav']
+    
+    ALLOWED_TYPES = {
+        'image/jpeg',
+        'image/png',
+        'application/pdf',
+        'video/mp4',
+        'text/plain'
+    }
+
+    # =========================
+    # Retrieval & Search
+    # =========================
 
     @staticmethod
     def get_user_files(user, search_term=None, favorites_only=False):
@@ -39,23 +61,9 @@ class FileStorageService:
             
         return queryset.order_by('-uploaded_at')
 
-    @staticmethod
-    def get_deleted_files(user):
-        """
-        Returns all soft-deleted files for the user, ordered by deletion timestamp (newest first).
-        """
-        return UserFile.objects.filter(
-            owner=user, 
-            is_deleted=True
-        ).order_by('-deleted_at')
-
-    ALLOWED_TYPES = {
-        'image/jpeg',
-        'image/png',
-        'application/pdf',
-        'video/mp4',
-        'text/plain'
-    }
+    # =========================
+    # Upload Management
+    # =========================
 
     @staticmethod
     def compute_checksum(file_obj, chunk_size=8192):
@@ -87,19 +95,6 @@ class FileStorageService:
             raise ValidationError(f"File type '{mime_type}' is not supported.")
 
         return mime_type
-
-    @staticmethod
-    def check_duplicate(checksum, user):
-        """
-        Check if a non-deleted file with the same checksum exists for this user.
-        Soft-deleted files are intentionally excluded so that re-uploading a
-        trashed file always succeeds.
-        """
-        return UserFile.objects.filter(
-            owner=user,
-            checksum=checksum,
-            is_deleted=False
-        ).first()
 
     @staticmethod
     def resolve_filename(base_name, user, checksum):
@@ -168,12 +163,15 @@ class FileStorageService:
             user_locked.save(update_fields=['consumed_storage'])
             
             return new_file
-    
+
+    # =========================
+    # File Operations
+    # =========================
+
     @staticmethod
     def update_file(file, data):
         """
-        api : api/products/update/<product id>/
-        Update a particular product
+        Update file metadata (name, description)
         """
         file.display_name = data.get('display_name', file.display_name)
         file.description = data.get('description', file.description)
@@ -190,12 +188,25 @@ class FileStorageService:
         file_instance.save()
         return file_instance
 
+    # =========================
+    # Trash Management
+    # =========================
+
+    @staticmethod
+    def get_deleted_files(user):
+        """
+        Returns all soft-deleted files for the user, ordered by deletion timestamp.
+        """
+        return UserFile.objects.filter(
+            owner=user, 
+            is_deleted=True
+        ).order_by('-deleted_at')
+
     @staticmethod
     def soft_delete_file(user, file_instance):
         """
         Marks the file as deleted and records the deletion timestamp.
         """
-        from django.utils import timezone
         file_instance.is_deleted = True
         file_instance.deleted_at = timezone.now()
         file_instance.save()
@@ -205,7 +216,6 @@ class FileStorageService:
     def hard_delete_file(file_instance):
         """
         Permanently deletes the file and updates user consumption.
-        Ensures atomicity and prevents race conditions during consumption updates.
         """
         with transaction.atomic():
             from .models import User
@@ -223,18 +233,17 @@ class FileStorageService:
     @staticmethod
     def restore_file(user, file_instance):
         """
-        Restores a soft-deleted file and clears its deletion timestamp.
+        Restores a soft-deleted file.
         """
         file_instance.is_deleted = False
         file_instance.deleted_at = None
         file_instance.save()
         return file_instance
 
-
     @staticmethod
     def restore_all_files(user):
         """
-        Restores all files marked as deleted for the given user and clears their deletion timestamps.
+        Restores all files marked as deleted for the given user.
         """
         updated_count = UserFile.objects.filter(owner=user, is_deleted=True).update(
             is_deleted=False,
@@ -253,155 +262,26 @@ class FileStorageService:
             FileStorageService.hard_delete_file(file_obj)
         return count
 
+    # =========================
+    # Duplicate Detection
+    # =========================
 
     @staticmethod
-    def get_upload_history(user, year, month):
-        # 1. Optimize range filtering
-        _, last_day = calendar.monthrange(year, month)
-        start_date = make_aware(datetime(year, month, 1))
-        end_date = make_aware(datetime(year, month, last_day, 23, 59, 59))
-
-        # 2. Fetch Uploads
-        files_qs = UserFile.objects.filter(
+    def check_duplicate(checksum, user):
+        """
+        Check if a non-deleted file with the same checksum exists.
+        """
+        return UserFile.objects.filter(
             owner=user,
-            uploaded_at__range=(start_date, end_date),
+            checksum=checksum,
             is_deleted=False
-        ).only('id', 'display_name', 'filename', 'file_size_bytes', 'uploaded_at').order_by('-uploaded_at')
-
-        # 3. Fetch Shares
-        shares_qs = SharedLink.objects.filter(
-            file__owner=user,
-            created_at__range=(start_date, end_date)
-        ).select_related('file').only(
-            'token', 
-            'file__display_name', 
-            'file__filename', 
-            'file__file_size_bytes',
-            'receipient_email', 
-            'created_at', 
-            'expires_at',
-            'is_revoked',
-            'message',
-            'file_id'
-        ).order_by('-created_at')
-
-        # 4. Global Stats
-        total_uploads = UserFile.objects.filter(owner=user, is_deleted=False).count()
-        total_shares = SharedLink.objects.filter(file__owner=user).count()
-
-        # 5. Grouping data for the calendar
-        history = defaultdict(list)
-        
-        # Add uploads to history
-        for f in files_qs:
-            day = f.uploaded_at.day
-            local_time = timezone.localtime(f.uploaded_at)
-            history[day].append({
-                "type": "upload",
-                "id": str(f.id),
-                "name": f.display_name or f.filename,
-                "size": f.file_size_bytes,
-                "time": local_time.strftime("%H:%M"),
-            })
-
-        # Add shares to history
-        for s in shares_qs:
-            day = s.created_at.day
-            local_time = timezone.localtime(s.created_at)
-            history[day].append({
-                "type": "share",
-                "file_id": str(s.file_id),
-                "file_name": s.file.display_name or s.file.filename,
-                "recipient_email": s.receipient_email or "Public Link",
-                "time": local_time.strftime("%H:%M"),
-                "created_at": s.created_at.isoformat(),
-                "expires_at": s.expires_at.isoformat(),
-                "is_revoked": s.is_revoked,
-                "is_expired": s.is_expired,
-                "message": s.message,
-                "file_size_bytes": s.file.file_size_bytes
-            })
-
-        # Sort daily events by time descending
-        for d in history:
-            history[d].sort(key=lambda x: x['time'], reverse=True)
-
-        return {
-            "history": history,
-            "month_stats": {
-                "upload_count": files_qs.count(),
-                "share_count": shares_qs.count(),
-                "total_size": files_qs.aggregate(Sum('file_size_bytes'))['file_size_bytes__sum'] or 0,
-            },
-            "global_stats": {
-                "total_uploads": total_uploads,
-                "total_shares": total_shares
-            }
-        }
-    
-
-    @staticmethod
-    def create_shareable_data(file_obj, request, duration_minutes=5, emails=None, message=""):
-        """
-        api: api/files/<file_id>/generate-link/
-        Generate Secure Link and optionally send email to recipients
-        """
-        try:
-            minutes = int(duration_minutes) if duration_minutes else 5
-        except (ValueError, TypeError):
-            minutes = 5
-            
-        expiry = timezone.now() + timedelta(minutes=minutes)
-        shared_link = SharedLink.objects.create(
-            file=file_obj,
-            expires_at=expiry
-        )
-        
-        relative_url = reverse('public-download', kwargs={'token': shared_link.token})
-        full_url = request.build_absolute_uri(relative_url)
-        
-        # Email Notification Logic
-        if emails and isinstance(emails, list) and len(emails) > 0:
-            owner_name = request.user.get_full_name() or request.user.username
-            subject = f"{owner_name} shared a file with you: {file_obj.filename}"
-            
-            # Simple text body (can be upgraded to a template)
-            body = (
-                f"Hello,\n\n"
-                f"{owner_name} has shared a file with you via NexusShare.\n\n"
-                f"File: {file_obj.filename}\n"
-                f"Secure Link: {full_url}\n"
-                f"Expires In: {minutes} minutes\n\n"
-            )
-            
-            if message:
-                body += f"Message from {owner_name}:\n\"{message}\"\n\n"
-                
-            body += "Please download the file before the link expires."
-
-            email = EmailMessage(
-                subject=subject,
-                body=body,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[settings.DEFAULT_FROM_EMAIL], # BCC recipients to keep them private from each other
-                bcc=emails, 
-            )
-            email.send(fail_silently=False)
-
-        return {
-            "download_url": full_url,
-            "filename": file_obj.filename,
-            "expires_at": shared_link.expires_at,
-            "sent_to": emails if emails else []
-        }
+        ).first()
 
     @staticmethod
     def get_duplicate_groups(user):
         """
         Finds files with the same checksum for a user.
-        Groups them and returns group details.
         """
-        # Find checksums that have more than one non-deleted file
         duplicate_checksums = UserFile.objects.filter(
             owner=user, 
             is_deleted=False, 
@@ -438,4 +318,294 @@ class FileStorageService:
         
         return result
 
-    
+    @staticmethod
+    def cleanup_duplicates(user):
+        """
+        Deletes all duplicate file instances for the user.
+        """
+        groups = FileStorageService.get_duplicate_groups(user)
+        deleted_count = 0
+        for group in groups:
+            duplicates = [inst for inst in group['instances'] if not inst['isOriginal']]
+            for dup in duplicates:
+                file_id = dup['id']
+                file_obj = UserFile.objects.filter(owner=user, id=file_id).first()
+                if file_obj:
+                    FileStorageService.hard_delete_file(file_obj)
+                    deleted_count += 1
+        return deleted_count
+
+    # =========================
+    # Sharing & Links
+    # =========================
+
+    @staticmethod
+    def create_shareable_data(file_obj, request, duration_minutes=5, emails=None, message=""):
+        """
+        Generate Secure Link and optionally send email to recipients
+        """
+        try:
+            minutes = int(duration_minutes) if duration_minutes else 5
+        except (ValueError, TypeError):
+            minutes = 5
+            
+        expiry = timezone.now() + timedelta(minutes=minutes)
+        shared_link = SharedLink.objects.create(
+            file=file_obj,
+            expires_at=expiry
+        )
+        
+        relative_url = reverse('public-download', kwargs={'token': shared_link.token})
+        full_url = request.build_absolute_uri(relative_url)
+        
+        # Email Notification Logic
+        if emails and isinstance(emails, list) and len(emails) > 0:
+            owner_name = request.user.get_full_name() or request.user.username
+            subject = f"{owner_name} shared a file with you: {file_obj.filename}"
+            
+            body = (
+                f"Hello,\n\n"
+                f"{owner_name} has shared a file with you via NexusShare.\n\n"
+                f"File: {file_obj.filename}\n"
+                f"Secure Link: {full_url}\n"
+                f"Expires In: {minutes} minutes\n\n"
+            )
+            
+            if message:
+                body += f"Message from {owner_name}:\n\"{message}\"\n\n"
+                
+            body += "Please download the file before the link expires."
+
+            email = EmailMessage(
+                subject=subject,
+                body=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[settings.DEFAULT_FROM_EMAIL], 
+                bcc=emails, 
+            )
+            email.send(fail_silently=False)
+
+        return {
+            "download_url": full_url,
+            "filename": file_obj.filename,
+            "expires_at": shared_link.expires_at,
+            "sent_to": emails if emails else []
+        }
+
+    # =========================
+    # Analytics
+    # =========================
+
+    @staticmethod
+    def get_upload_history(user, year, month):
+        _, last_day = calendar.monthrange(year, month)
+        start_date = make_aware(datetime(year, month, 1))
+        end_date = make_aware(datetime(year, month, last_day, 23, 59, 59))
+
+        files_qs = UserFile.objects.filter(
+            owner=user,
+            uploaded_at__range=(start_date, end_date),
+            is_deleted=False
+        ).only('id', 'display_name', 'filename', 'file_size_bytes', 'uploaded_at').order_by('-uploaded_at')
+
+        shares_qs = SharedLink.objects.filter(
+            file__owner=user,
+            created_at__range=(start_date, end_date)
+        ).select_related('file').only(
+            'token', 'file__display_name', 'file__filename', 'file__file_size_bytes',
+            'receipient_email', 'created_at', 'expires_at', 'is_revoked', 'message', 'file_id'
+        ).order_by('-created_at')
+
+        total_uploads = UserFile.objects.filter(owner=user, is_deleted=False).count()
+        total_shares = SharedLink.objects.filter(file__owner=user).count()
+
+        history = defaultdict(list)
+        for f in files_qs:
+            day = f.uploaded_at.day
+            history[day].append({
+                "type": "upload",
+                "id": str(f.id),
+                "name": f.display_name or f.filename,
+                "size": f.file_size_bytes,
+                "time": timezone.localtime(f.uploaded_at).strftime("%H:%M"),
+            })
+
+        for s in shares_qs:
+            day = s.created_at.day
+            history[day].append({
+                "type": "share",
+                "file_id": str(s.file_id),
+                "file_name": s.file.display_name or s.file.filename,
+                "recipient_email": s.receipient_email or "Public Link",
+                "time": timezone.localtime(s.created_at).strftime("%H:%M"),
+                "is_revoked": s.is_revoked,
+                "is_expired": s.is_expired,
+            })
+
+        for d in history:
+            history[d].sort(key=lambda x: x['time'], reverse=True)
+
+        total_active_links = SharedLink.objects.filter(file__owner=user, is_revoked=False).exclude(expires_at__lt=timezone.now()).count()
+
+        return {
+            "history": history,
+            "month_stats": {
+                "upload_count": files_qs.count(),
+                "share_count": shares_qs.count(),
+                "total_size": files_qs.aggregate(Sum('file_size_bytes'))['file_size_bytes__sum'] or 0,
+            },
+            "global_stats": {
+                "total_uploads": total_uploads,
+                "total_shares": total_shares,
+                "active_links": total_active_links
+            }
+        }
+
+    @staticmethod
+    def get_activity_snapshots(user):
+        """
+        Calculates daily upload volume (MB) for last 7 days 
+        and weekly upload count for last 4 weeks.
+        """
+        from datetime import timedelta
+        
+        now = timezone.now()
+        
+        # 1. Daily Volume (Last 7 Days)
+        daily = []
+        for i in range(6, -1, -1):
+            day = now - timedelta(days=i)
+            start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+            
+            size_bytes = UserFile.objects.filter(
+                owner=user, uploaded_at__range=(start, end), is_deleted=False
+            ).aggregate(total=Sum('file_size_bytes'))['total'] or 0
+            
+            daily.append({
+                "label": day.strftime("%b %d"),
+                "value": round(size_bytes / (1024 * 1024), 1),
+                "unit": "MB"
+            })
+
+        # 2. Weekly Count (Last 4 Weeks)
+        weekly = []
+        for i in range(3, -1, -1):
+            start = (now - timedelta(weeks=i+1)).replace(hour=0, minute=0, second=0)
+            end = (now - timedelta(weeks=i)).replace(hour=23, minute=59, second=59)
+            
+            count = UserFile.objects.filter(
+                owner=user, uploaded_at__range=(start, end), is_deleted=False
+            ).count()
+            
+            weekly.append({
+                "label": f"{start.strftime('%b %d')} - {end.strftime('%b %d')}",
+                "value": count,
+                "unit": "Files"
+            })
+
+        return {"daily": daily, "weekly": weekly}
+
+    @staticmethod
+    def get_storage_snapshots(user):
+        """
+        Calculates storage usage snapshots for the last 6 months.
+        """
+        from django.db.models import Q
+        snapshots = []
+        now = timezone.now()
+        
+        for i in range(5, -1, -1):
+            month = now.month - i
+            year = now.year
+            while month <= 0:
+                month += 12
+                year -= 1
+            
+            _, last_day = calendar.monthrange(year, month)
+            month_end = make_aware(datetime(year, month, last_day, 23, 59, 59))
+            
+            size_at_point = UserFile.objects.filter(
+                owner=user, uploaded_at__lte=month_end
+            ).filter(
+                Q(is_deleted=False) | Q(deleted_at__gt=month_end)
+            ).aggregate(total=Sum('file_size_bytes'))['total'] or 0
+            
+            limit = user.storage_limit_bytes
+            percentage = (size_at_point / limit * 100) if limit > 0 else 0
+            
+            snapshots.append({
+                "label": month_end.strftime("%b"),
+                "value": round(percentage, 1),
+                "raw_size": size_at_point
+            })
+            
+        return snapshots
+
+    # =========================
+    # Storage Insights
+    # =========================
+
+    @staticmethod
+    def get_storage_stats(user):
+        """
+        Calculates storage usage breakdown across categories.
+        """
+        from django.db.models import Case, When, Value, IntegerField, Q
+        
+        stats = UserFile.objects.filter(owner=user, is_deleted=False).aggregate(
+            images_size=Sum(Case(When(mime_type__in=FileStorageService.IMAGE_TYPES, then='file_size_bytes'), default=0, output_field=IntegerField())),
+            docs_size=Sum(Case(When(mime_type__in=FileStorageService.DOC_TYPES, then='file_size_bytes'), default=0, output_field=IntegerField())),
+            media_size=Sum(Case(When(mime_type__in=FileStorageService.MEDIA_TYPES, then='file_size_bytes'), default=0, output_field=IntegerField())),
+            others_size=Sum(Case(When(~Q(mime_type__in=FileStorageService.IMAGE_TYPES + FileStorageService.DOC_TYPES + FileStorageService.MEDIA_TYPES), then='file_size_bytes'), default=0, output_field=IntegerField()))
+        )
+
+        trash_stats = UserFile.objects.filter(owner=user, is_deleted=True).aggregate(trash_size=Sum('file_size_bytes'))
+        trash_bytes = trash_stats['trash_size'] or 0
+
+        total_active_bytes = (stats['images_size'] or 0) + (stats['docs_size'] or 0) + \
+                             (stats['media_size'] or 0) + (stats['others_size'] or 0)
+        
+        total_limit = user.storage_limit_bytes
+
+        def format_size(size_bytes):
+            if size_bytes > 1024 * 1024 * 1024:
+                return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+            return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+        categories = [
+            {"name": "Images", "size": format_size(stats['images_size'] or 0), "color": "bg-yellow-500", "percentage": (stats['images_size'] or 0) / total_active_bytes * 100 if total_active_bytes > 0 else 0},
+            {"name": "Documents", "size": format_size(stats['docs_size'] or 0), "color": "bg-green-500", "percentage": (stats['docs_size'] or 0) / total_active_bytes * 100 if total_active_bytes > 0 else 0},
+            {"name": "Media", "size": format_size(stats['media_size'] or 0), "color": "bg-purple-500", "percentage": (stats['media_size'] or 0) / total_active_bytes * 100 if total_active_bytes > 0 else 0},
+            {"name": "Others", "size": format_size(stats['others_size'] or 0), "color": "bg-gray-400", "percentage": (stats['others_size'] or 0) / total_active_bytes * 100 if total_active_bytes > 0 else 0},
+        ]
+
+        return {
+            "total": total_limit / (1024 * 1024 * 1024),
+            "used": round(user.consumed_storage / (1024 * 1024 * 1024), 2), 
+            "trash_size": format_size(trash_bytes),
+            "trash_raw": trash_bytes,
+            "categories": categories
+        }
+
+    @staticmethod
+    def get_large_files(user, category=None):
+        """
+        Returns discovery files (large files) or category-specific files.
+        """
+        DISCOVERY_THRESHOLD_BYTES = 50 * 1024 * 1024
+        queryset = UserFile.objects.filter(owner=user, is_deleted=False)
+        
+        if category and category != 'All':
+            if category == 'Images':
+                queryset = queryset.filter(mime_type__in=FileStorageService.IMAGE_TYPES)
+            elif category == 'Documents':
+                queryset = queryset.filter(mime_type__in=FileStorageService.DOC_TYPES)
+            elif category == 'Media':
+                queryset = queryset.filter(mime_type__in=FileStorageService.MEDIA_TYPES)
+            elif category == 'Others':
+                queryset = queryset.exclude(mime_type__in=FileStorageService.IMAGE_TYPES + FileStorageService.DOC_TYPES + FileStorageService.MEDIA_TYPES)
+        else:
+            queryset = queryset.filter(file_size_bytes__gt=DISCOVERY_THRESHOLD_BYTES)
+
+        return queryset.order_by('-file_size_bytes')

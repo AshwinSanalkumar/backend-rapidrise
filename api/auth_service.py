@@ -1,6 +1,22 @@
 from .models import User
 from django.core.exceptions import ValidationError
 from rest_framework.response import Response
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.utils.http import (
+    urlsafe_base64_encode,
+    urlsafe_base64_decode
+)
+from django.utils.encoding import (
+    force_bytes,
+    force_str
+)
+from django.core.mail import send_mail
+from django.conf import settings
+
+
+
+token_generator = PasswordResetTokenGenerator()
+
 
 class AuthenticationService:
     @staticmethod
@@ -63,3 +79,63 @@ class AuthenticationService:
             )
 
         return response
+
+    @staticmethod
+    def send_reset_email(email):
+
+        try:
+            user = User.objects.get(email=email)
+
+        except User.DoesNotExist:
+            return
+
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = token_generator.make_token(user)
+
+        reset_url = (
+            f"{settings.FRONTEND_URL}"
+            f"/reset-password/{uid}/{token}/"
+        )
+
+        subject = "Reset Your Password"
+
+        message = f"""
+Hi {user.first_name},
+
+Click the link below to reset your password:
+
+{reset_url}
+
+This link will expire in 10 minutes.
+
+If you did not request this, please ignore this email.
+"""
+
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=False,
+        )
+
+    @staticmethod
+    def reset_password(uidb64, token, password):
+
+        try:
+            uid = force_str(
+                urlsafe_base64_decode(uidb64)
+            )
+
+            user = User.objects.get(pk=uid)
+
+        except Exception:
+            return False, "Invalid reset link"
+
+        if not token_generator.check_token(user, token):
+            return False, "Token expired or invalid"
+
+        user.set_password(password)
+        user.save()
+
+        return True, "Password reset successful"
