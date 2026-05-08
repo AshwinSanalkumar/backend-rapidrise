@@ -6,10 +6,11 @@ from .views import (
     RestoreAllFilesView, EmptyTrashView, FavoritesView, SoftDeleteFile, FileDetailView, 
     FileUpdateView, CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView, 
     FolderCreateView, FolderListView, FolderContentView, HardDeleteView, UploadHistoryView, 
-    RecentFilesView, UserDetailView, DuplicateFilesView,
+    RecentFilesView, UserDetailView, DuplicateFilesView, CleanupDuplicatesView, StorageStatsView, StorageTrendsView, LargeFilesView,
     WorkstationListView, WorkstationDetailView, UserSearchView, 
     WorkstationInviteView, WorkstationInviteRespondView, WorkstationExportView,
-    WorkstationVersionsView, WorkstationVersionRestoreView, WorkstationVersionDeleteView
+    WorkstationVersionsView, WorkstationVersionRestoreView, WorkstationVersionDeleteView,
+    ForgotPasswordView, ResetPasswordView
 )
 
 urlpatterns = [
@@ -19,6 +20,8 @@ urlpatterns = [
     path('refresh/', CookieTokenRefreshView.as_view(), name='refresh'), 
     path('logout/', LogoutView.as_view(), name='logout'),
     path('user/', UserDetailView.as_view(), name='user-detail'),
+    path("forgot-password/", ForgotPasswordView.as_view(), name="forgot-password"),
+    path("reset-password/<uidb64>/<token>/", ResetPasswordView.as_view(), name="reset-password"),
 
     # Files
     path('files/upload/', FileUploadView.as_view(), name='file-upload'),
@@ -54,6 +57,10 @@ urlpatterns = [
     
     # Storage
     path('storage/duplicates/', DuplicateFilesView.as_view(), name='duplicate-files'),
+    path('storage/cleanup-duplicates/', CleanupDuplicatesView.as_view(), name='cleanup-duplicates'),
+    path('storage/stats/', StorageStatsView.as_view(), name='storage-stats'),
+    path('storage/trends/', StorageTrendsView.as_view(), name='storage-trends'),
+    path('storage/large-files/', LargeFilesView.as_view(), name='large-files'),
 
     # Workstations
     path('workstations/', WorkstationListView.as_view(), name='workstation-list'),
