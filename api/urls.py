@@ -1,26 +1,37 @@
 from django.urls import path
-from .views import PublicFileView, RegisterView, FileUploadView, FileListView,FolderDeleteView,CreateSharedLinkView,RevokeSharedLinkView,ListSharedLinksView,FolderUpdateView ,FolderContentUploadView,FolderContentDeleteView ,TrashView,RestoreFileView, RestoreAllFilesView,EmptyTrashView,FavoritesView,SoftDeleteFile,FileDetailView,FileUpdateView,CookieTokenObtainPairView,CookieTokenRefreshView, LogoutView, FolderCreateView,FolderListView,FolderContentView,HardDeleteView ,UploadHistoryView, RecentFilesView, UserDetailView, DuplicateFilesView
-
+from .views import (
+    PublicFileView, RegisterView, FileUploadView, FileListView, FolderDeleteView, 
+    CreateSharedLinkView, RevokeSharedLinkView, ListSharedLinksView, FolderUpdateView, 
+    FolderContentUploadView, FolderContentDeleteView, TrashView, RestoreFileView, 
+    RestoreAllFilesView, EmptyTrashView, FavoritesView, SoftDeleteFile, FileDetailView, 
+    FileUpdateView, CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView, 
+    FolderCreateView, FolderListView, FolderContentView, HardDeleteView, UploadHistoryView, 
+    RecentFilesView, UserDetailView, DuplicateFilesView,
+    WorkstationListView, WorkstationDetailView, UserSearchView, 
+    WorkstationInviteView, WorkstationInviteRespondView, WorkstationExportView,
+    WorkstationVersionsView, WorkstationVersionRestoreView, WorkstationVersionDeleteView
+)
 
 urlpatterns = [
-    # Using 'register/' as the endpoint
+    # Auth
     path('register/', RegisterView.as_view(), name='auth_register'),
-    path('login/',CookieTokenObtainPairView.as_view(),name='login'),
-    path('refresh/',CookieTokenRefreshView.as_view(),name='login'), 
-    path('logout/', LogoutView.as_view(),name="login"),
+    path('login/', CookieTokenObtainPairView.as_view(), name='login'),
+    path('refresh/', CookieTokenRefreshView.as_view(), name='refresh'), 
+    path('logout/', LogoutView.as_view(), name='logout'),
     path('user/', UserDetailView.as_view(), name='user-detail'),
 
+    # Files
     path('files/upload/', FileUploadView.as_view(), name='file-upload'),
     path('files/view/<str:file_id>/', FileDetailView.as_view(), name='file-detail-view'),
     path('files/favorite/<str:file_id>/', FavoritesView.as_view(), name='add-favorites'),
     path('files/list/', FileListView.as_view(), name='file-list'),
     path('files/recents/', RecentFilesView.as_view(), name='file-recents'),
-    path('files/update/<str:file_id>/', FileUpdateView.as_view(), name='product-update'),
+    path('files/update/<str:file_id>/', FileUpdateView.as_view(), name='file-update'),
     path('files/history/', UploadHistoryView.as_view(), name='file-history'),
-
     path('files/delete/<str:file_id>/', SoftDeleteFile.as_view(), name='soft-delete'),
     path('files/restore/<str:file_id>/', RestoreFileView.as_view(), name='restore-file'),
 
+    # Folders
     path('assets/list/', FolderListView.as_view(), name='folder-list'),
     path('assets/create/', FolderCreateView.as_view(), name='folder-create'),
     path('assets/update/<uuid:folder_id>/', FolderUpdateView.as_view(), name='folder-update'),
@@ -29,15 +40,29 @@ urlpatterns = [
     path('assets/view/<uuid:folder_id>/upload/', FolderContentUploadView.as_view(), name='folder-upload'),
     path('assets/view/<uuid:folder_id>/files/<uuid:file_id>/remove/', FolderContentDeleteView.as_view(), name='folder-file-remove'),
 
+    # Trash
     path('trash/', TrashView.as_view(), name='trash'),
-    path('trash/delete/<uuid:file_id>/',HardDeleteView.as_view(),name='hard-delete'),
+    path('trash/delete/<uuid:file_id>/', HardDeleteView.as_view(), name='hard-delete'),
     path('trash/restore-all/', RestoreAllFilesView.as_view(), name='restore-all'),
     path('trash/empty/', EmptyTrashView.as_view(), name='empty-trash'),
 
+    # Sharing
     path('files/<str:file_id>/share/', CreateSharedLinkView.as_view(), name='generate-share-link'),
     path('files/shared-links/', ListSharedLinksView.as_view(), name='list-shared-links'),
     path('files/share/revoke/<str:token>/', RevokeSharedLinkView.as_view(), name='revoke-share-link'),
     path('file/shared/<str:token>/', PublicFileView.as_view(), name='shared-file'),
+    
+    # Storage
     path('storage/duplicates/', DuplicateFilesView.as_view(), name='duplicate-files'),
 
+    # Workstations
+    path('workstations/', WorkstationListView.as_view(), name='workstation-list'),
+    path('workstations/<uuid:workstation_id>/', WorkstationDetailView.as_view(), name='workstation-detail'),
+    path('workstations/search-users/', UserSearchView.as_view(), name='user-search'),
+    path('workstations/invites/', WorkstationInviteView.as_view(), name='workstation-invites'),
+    path('workstations/invites/<int:invite_id>/respond/', WorkstationInviteRespondView.as_view(), name='workstation-invite-respond'),
+    path('workstations/<uuid:workstation_id>/export/', WorkstationExportView.as_view(), name='workstation-export'),
+    path('workstations/<uuid:workstation_id>/versions/', WorkstationVersionsView.as_view(), name='workstation-versions'),
+    path('workstations/<uuid:workstation_id>/versions/<uuid:version_id>/restore/', WorkstationVersionRestoreView.as_view(), name='workstation-version-restore'),
+    path('workstations/<uuid:workstation_id>/versions/<uuid:version_id>/delete/', WorkstationVersionDeleteView.as_view(), name='workstation-version-delete'),
 ]

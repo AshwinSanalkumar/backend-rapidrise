@@ -1,13 +1,18 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import RegistrationSerializer,UserFileSerializer, FolderSerializer, SharedLinkSerializer, UserSerializer
+from .serializers import (
+    RegistrationSerializer, UserFileSerializer, FolderSerializer, 
+    SharedLinkSerializer, UserSerializer, WorkstationSerializer,
+    WorkstationInviteSerializer, UserSearchSerializer, WorkstationVersionSerializer
+)
 from .auth_service import AuthenticationService
 from .file_service import FileStorageService
 from .folder_service import FolderService
 from .fileShare_service import FileShareService
 from rest_framework.permissions import  IsAuthenticated, AllowAny
-from .models import UserFile,UserFolder,SharedLink
+from django.db import models
+from .models import User, UserFile, UserFolder, SharedLink, Workstation, WorkstationInvite, WorkstationMember
 from uuid import UUID
 from django.shortcuts import get_object_or_404
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -511,9 +516,162 @@ class DuplicateFilesView(APIView):
                 deleted_count += 1
             except Exception:
                 continue
-                
         return Response({
             "status": "success",
             "message": f"Successfully removed {deleted_count} duplicates",
             "deleted_count": deleted_count
         }, status=status.HTTP_200_OK)
+
+from .workstation_service import WorkstationService
+
+# ---------------------------------------------------------------------------------------------
+# WORKSTATION VIEWS
+
+class WorkstationListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        workstations = WorkstationService.get_user_workstations(request.user)
+        serializer = WorkstationSerializer(workstations, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        workstation = WorkstationService.create_workstation(request.user, request.data)
+        return Response(WorkstationSerializer(workstation).data, status=status.HTTP_201_CREATED)
+
+class WorkstationDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, workstation_id):
+        workstation = WorkstationService.get_workstation_detail(request.user, workstation_id)
+        serializer = WorkstationSerializer(workstation)
+        return Response(serializer.data)
+
+    def put(self, request, workstation_id):
+        workstation = WorkstationService.update_workstation(request.user, workstation_id, request.data)
+        return Response(WorkstationSerializer(workstation).data)
+
+    def delete(self, request, workstation_id):
+        WorkstationService.delete_workstation(request.user, workstation_id)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+class UserSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = request.query_params.get('q', '')
+        users = WorkstationService.search_users(request.user, query)
+        serializer = UserSearchSerializer(users, many=True)
+        return Response(serializer.data)
+
+class WorkstationInviteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        invites = WorkstationService.get_pending_invites(request.user)
+        serializer = WorkstationInviteSerializer(invites, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        try:
+            invite = WorkstationService.send_invite(
+                request.user, 
+                request.data.get('workstation'),
+                request.data.get('invitee'),
+                request.data.get('role', 'EDITOR')
+            )
+            return Response(WorkstationInviteSerializer(invite).data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class WorkstationInviteRespondView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, invite_id):
+        try:
+            result = WorkstationService.respond_to_invite(
+                request.user, 
+                invite_id, 
+                request.data.get('action')
+            )
+            return Response(result)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class WorkstationVersionsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, workstation_id):
+        try:
+            versions = WorkstationService.get_versions(request.user, workstation_id)
+            serializer = WorkstationVersionSerializer(versions, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class WorkstationVersionRestoreView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, workstation_id, version_id):
+        try:
+            workstation = WorkstationService.restore_version(request.user, workstation_id, version_id)
+            serializer = WorkstationSerializer(workstation)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class WorkstationVersionDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, workstation_id, version_id):
+        try:
+            workstation, rolled_back = WorkstationService.delete_version(request.user, workstation_id, version_id)
+            return Response({
+                "rolled_back": rolled_back,
+                "workstation": WorkstationSerializer(workstation).data
+            }, status=status.HTTP_200_OK)
+        except PermissionError as e:
+            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# ---------------------------------------------------------------------------------------------
+# EXPORT VIEWS
+
+from io import BytesIO
+from django.http import HttpResponse
+from docx import Document
+
+class WorkstationExportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, workstation_id):
+        format_type = request.query_params.get('format', 'pdf').lower()
+        workstation = get_object_or_404(Workstation, id=workstation_id)
+        
+        # Check permissions
+        if not WorkstationMember.objects.filter(workstation=workstation, user=request.user).exists():
+            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        if format_type == 'docx':
+            return self.export_docx(workstation)
+        else:
+            return Response({"error": "PDF export is handled on the frontend"}, status=status.HTTP_400_BAD_REQUEST)
+
+    def export_docx(self, workstation):
+        document = Document()
+        document.add_heading(workstation.title, 0)
+        
+        if workstation.description:
+            document.add_paragraph(workstation.description)
+
+        # Add content - basic text area content
+        document.add_paragraph(workstation.content)
+
+        buffer = BytesIO()
+        document.save(buffer)
+        buffer.seek(0)
+
+        response = HttpResponse(buffer.read(), content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        response['Content-Disposition'] = f'attachment; filename="{workstation.title}.docx"'
+        return response

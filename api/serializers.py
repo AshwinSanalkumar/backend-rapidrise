@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import User
 import re
-from .models import User, UserFile, UserFolder, SharedLink
+from .models import User, UserFile, UserFolder, SharedLink, Workstation, WorkstationMember, WorkstationInvite, WorkstationVersion
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
@@ -99,3 +99,68 @@ class SharedLinkSerializer(serializers.ModelSerializer):
             'revoked_at', 'expires_at', 'created_at', 'is_expired',
             'message'
         ]
+
+class WorkstationMemberSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkstationMember
+        fields = ['id', 'user', 'user_email', 'user_name', 'role', 'joined_at']
+
+    def get_user_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}"
+
+class WorkstationInviteSerializer(serializers.ModelSerializer):
+    workstation_title = serializers.CharField(source='workstation.title', read_only=True)
+    inviter_name = serializers.SerializerMethodField()
+    invitee_email = serializers.EmailField(source='invitee.email', read_only=True)
+
+    class Meta:
+        model = WorkstationInvite
+        fields = ['id', 'workstation', 'workstation_title', 'inviter', 'inviter_name', 'invitee', 'invitee_email', 'role', 'status', 'created_at']
+        read_only_fields = ['id', 'inviter', 'status', 'created_at']
+
+    def get_inviter_name(self, obj):
+        return f"{obj.inviter.first_name} {obj.inviter.last_name}"
+
+class WorkstationSerializer(serializers.ModelSerializer):
+    members = WorkstationMemberSerializer(many=True, read_only=True)
+    owner_name = serializers.SerializerMethodField()
+    owner_email = serializers.EmailField(source='owner.email', read_only=True)
+    member_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Workstation
+        fields = ['id', 'title', 'description', 'content', 'owner', 'owner_name', 'owner_email', 'visibility', 'template', 'members', 'member_count', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'owner', 'created_at', 'updated_at']
+
+    def get_owner_name(self, obj):
+        return f"{obj.owner.first_name} {obj.owner.last_name}"
+
+    def get_member_count(self, obj):
+        return obj.members.count()
+
+class UserSearchSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'full_name']
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}"
+
+class WorkstationVersionSerializer(serializers.ModelSerializer):
+    saved_by_name = serializers.SerializerMethodField()
+    saved_by_email = serializers.EmailField(source='saved_by.email', read_only=True)
+
+    class Meta:
+        model = WorkstationVersion
+        fields = ['id', 'workstation', 'content', 'saved_by', 'saved_by_name', 'saved_by_email', 'created_at']
+        read_only_fields = ['id', 'workstation', 'saved_by', 'created_at']
+
+    def get_saved_by_name(self, obj):
+        if obj.saved_by:
+            return f"{obj.saved_by.first_name} {obj.saved_by.last_name}"
+        return "Unknown"

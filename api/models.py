@@ -82,3 +82,60 @@ class SharedLink(models.Model):
     
     class Meta:
         db_table = "SharedLink"
+
+class Workstation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='owned_workstations')
+    content = models.TextField(blank=True, default="")
+    visibility = models.CharField(max_length=20, choices=[('private', 'Private'), ('public', 'Public')], default='private')
+    template = models.CharField(max_length=50, default='blank')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "Workstations"
+
+class WorkstationMember(models.Model):
+    ROLE_CHOICES = [
+        ('OWNER', 'Owner'),
+        ('EDITOR', 'Editor'),
+        ('VIEWER', 'Viewer'),
+    ]
+    workstation = models.ForeignKey(Workstation, on_delete=models.CASCADE, related_name='members')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='workstation_memberships')
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='EDITOR')
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('workstation', 'user')
+        db_table = "WorkstationMembers"
+
+class WorkstationInvite(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('ACCEPTED', 'Accepted'),
+        ('REJECTED', 'Rejected'),
+    ]
+    workstation = models.ForeignKey(Workstation, on_delete=models.CASCADE, related_name='invites')
+    inviter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_invites')
+    invitee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_invites')
+    role = models.CharField(max_length=10, choices=WorkstationMember.ROLE_CHOICES, default='EDITOR')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "WorkstationInvites"
+
+class WorkstationVersion(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workstation = models.ForeignKey(Workstation, on_delete=models.CASCADE, related_name='versions')
+    content = models.TextField(blank=True, default="")
+    saved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='workstation_versions')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "WorkstationVersions"
+        ordering = ['-created_at']
