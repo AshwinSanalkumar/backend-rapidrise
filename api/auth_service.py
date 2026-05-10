@@ -20,6 +20,19 @@ token_generator = PasswordResetTokenGenerator()
 
 class AuthenticationService:
     @staticmethod
+    def change_password(user, current_password, new_password):
+        """Validates current password and updates to new password."""
+        if not current_password or not new_password:
+            raise ValueError("Both current and new passwords are required.")
+        
+        if not user.check_password(current_password):
+            raise ValueError("Incorrect current password.")
+
+        user.set_password(new_password)
+        user.save()
+        return True
+
+    @staticmethod
     def register_user(email, password, first_name, last_name, dob):
         if User.objects.filter(email=email).exists():
             raise ValidationError("Email already registered.")
@@ -47,14 +60,9 @@ class AuthenticationService:
         """
         Business logic to transform a JWT body response into HttpOnly cookies.
         """
+        from .serializers import UserSerializer
         user = AuthenticationService.get_user_by_identity(user_data)
-        response.data['user'] = {
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-        }
+        response.data['user'] = UserSerializer(user).data
         access_token = response.data.pop('access', None)
         refresh_token = response.data.pop('refresh', None)
 

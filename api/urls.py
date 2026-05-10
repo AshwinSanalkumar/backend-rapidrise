@@ -10,7 +10,7 @@ from .views import (
     WorkstationListView, WorkstationDetailView, UserSearchView, 
     WorkstationInviteView, WorkstationInviteRespondView, WorkstationExportView,
     WorkstationVersionsView, WorkstationVersionRestoreView, WorkstationVersionDeleteView,
-    ForgotPasswordView, ResetPasswordView,
+    ForgotPasswordView, ResetPasswordView, ChangePasswordView,
     CreateFileRequestView, SentRequestsView, ReceivedRequestsView, DeclineRequestView, FulfillRequestView, ImportRequestFileView
 )
 
@@ -21,6 +21,7 @@ urlpatterns = [
     path('refresh/', CookieTokenRefreshView.as_view(), name='refresh'), 
     path('logout/', LogoutView.as_view(), name='logout'),
     path('user/', UserDetailView.as_view(), name='user-detail'),
+    path('user/change-password/', ChangePasswordView.as_view(), name='change-password'),
     path("forgot-password/", ForgotPasswordView.as_view(), name="forgot-password"),
     path("reset-password/<uidb64>/<token>/", ResetPasswordView.as_view(), name="reset-password"),
 
