@@ -781,10 +781,98 @@ class WorkstationExportView(APIView):
         # Add content - basic text area content
         document.add_paragraph(workstation.content)
 
-        buffer = BytesIO()
-        document.save(buffer)
         buffer.seek(0)
 
         response = HttpResponse(buffer.read(), content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
         response['Content-Disposition'] = f'attachment; filename="{workstation.title}.docx"'
         return response
+
+# ---------------------------------------------------------------------------------------------
+# FILE REQUEST VIEWS
+
+from .serializers import FileRequestSerializer
+from .request_service import RequestService
+
+class CreateFileRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        email = request.data.get('email')
+        note = request.data.get('note', '')
+
+        if not email:
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            file_request = RequestService.create_request(request.user, email, note)
+            serializer = FileRequestSerializer(file_request)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except ValueError as e:
+            error_status = status.HTTP_404_NOT_FOUND if "not found" in str(e) else status.HTTP_400_BAD_REQUEST
+            return Response({"error": str(e)}, status=error_status)
+
+
+class SentRequestsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        requests_list = RequestService.get_sent_requests(request.user)
+        serializer = FileRequestSerializer(requests_list, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ReceivedRequestsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        requests_list = RequestService.get_received_requests(request.user)
+        serializer = FileRequestSerializer(requests_list, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class DeclineRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, request_id):
+        try:
+            RequestService.decline_request(request.user, request_id)
+            return Response({"message": "Request declined."}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FulfillRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, request_id):
+        file_obj = request.FILES.get('file')
+        
+        try:
+            file_request = RequestService.fulfill_request(request.user, request_id, file_obj)
+            serializer = FileRequestSerializer(file_request)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ImportRequestFileView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, request_id):
+        file_id = request.data.get('file_id')
+        if not file_id:
+            return Response({"error": "file_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            imported_file = RequestService.import_request_file(request.user, request_id, file_id)
+            serializer = UserFileSerializer(imported_file)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except ValueError as e:
+            error_status = status.HTTP_404_NOT_FOUND if "not found" in str(e) else status.HTTP_400_BAD_REQUEST
+            return Response({"error": str(e)}, status=error_status)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

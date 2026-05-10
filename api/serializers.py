@@ -164,3 +164,19 @@ class WorkstationVersionSerializer(serializers.ModelSerializer):
         if obj.saved_by:
             return f"{obj.saved_by.first_name} {obj.saved_by.last_name}"
         return "Unknown"
+
+from .models import FileRequest
+
+class FileRequestSerializer(serializers.ModelSerializer):
+    sender_email = serializers.EmailField(source='sender.email', read_only=True)
+    sender_name = serializers.SerializerMethodField()
+    recipient_email = serializers.EmailField(source='recipient.email', read_only=True)
+    files = UserFileSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = FileRequest
+        fields = ['id', 'sender', 'sender_email', 'sender_name', 'recipient', 'recipient_email', 'note', 'status', 'files', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'sender', 'status', 'created_at', 'updated_at']
+
+    def get_sender_name(self, obj):
+        return f"{obj.sender.first_name} {obj.sender.last_name}"

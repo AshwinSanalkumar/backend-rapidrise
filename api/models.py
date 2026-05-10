@@ -139,3 +139,17 @@ class WorkstationVersion(models.Model):
     class Meta:
         db_table = "WorkstationVersions"
         ordering = ['-created_at']
+
+class FileRequest(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_file_requests')
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_file_requests')
+    note = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=[('pending', 'Pending'), ('fulfilled', 'Fulfilled'), ('declined', 'Declined')], default='pending')
+    files = models.ManyToManyField(UserFile, related_name='file_requests', blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "FileRequests"
+        ordering = ['-created_at']
