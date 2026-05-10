@@ -38,24 +38,28 @@ class RequestService:
         return file_request
 
     @staticmethod
-    def fulfill_request(user, request_id, file_obj):
+    def fulfill_request(user, request_id, file_objs):
         file_request = get_object_or_404(FileRequest, id=request_id, recipient=user)
         
         if file_request.status != 'pending':
             raise ValueError("Request is already processed.")
 
-        if not file_obj:
-            raise ValueError("No file uploaded.")
+        if not file_objs:
+            raise ValueError("No files uploaded.")
 
-        # Process and store the file normally for the recipient
-        new_file = FileStorageService.process_and_store_file(
-            user=user, 
-            file_obj=file_obj,
-            display_name=file_obj.name,
-            description=f"Fulfilled request for {file_request.sender.email}"
-        )
+        new_files = []
+        for file_obj in file_objs:
+            # Process and store the file normally for the recipient
+            new_file = FileStorageService.process_and_store_file(
+                user=user, 
+                file_obj=file_obj,
+                display_name=file_obj.name,
+                description=f"Fulfilled request for {file_request.sender.email}"
+            )
+            new_files.append(new_file)
 
-        file_request.files.add(new_file)
+        # Add all uploaded files to the many-to-many field
+        file_request.files.add(*new_files)
         file_request.status = 'fulfilled'
         file_request.save()
 

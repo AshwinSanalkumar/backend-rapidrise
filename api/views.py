@@ -847,10 +847,10 @@ class FulfillRequestView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, request_id):
-        file_obj = request.FILES.get('file')
+        file_objs = request.FILES.getlist('files')
         
         try:
-            file_request = RequestService.fulfill_request(request.user, request_id, file_obj)
+            file_request = RequestService.fulfill_request(request.user, request_id, file_objs)
             serializer = FileRequestSerializer(file_request)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except ValueError as e:
