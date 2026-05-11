@@ -622,6 +622,7 @@ class LargeFilesView(APIView):
         files = FileStorageService.get_large_files(request.user, category=category)
         
         paginator = StandardPagination()
+        paginator.page_size = 5
         page = paginator.paginate_queryset(files, request)
         if page is not None:
              serializer = UserFileSerializer(page, many=True)
