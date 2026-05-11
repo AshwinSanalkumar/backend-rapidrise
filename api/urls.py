@@ -10,7 +10,8 @@ from .views import (
     WorkstationListView, WorkstationDetailView, UserSearchView, 
     WorkstationInviteView, WorkstationInviteRespondView, WorkstationExportView,
     WorkstationVersionsView, WorkstationVersionRestoreView, WorkstationVersionDeleteView,
-    ForgotPasswordView, ResetPasswordView
+    ForgotPasswordView, ResetPasswordView,
+    CreateFileRequestView, SentRequestsView, ReceivedRequestsView, DeclineRequestView, FulfillRequestView, ImportRequestFileView
 )
 
 urlpatterns = [
@@ -22,6 +23,14 @@ urlpatterns = [
     path('user/', UserDetailView.as_view(), name='user-detail'),
     path("forgot-password/", ForgotPasswordView.as_view(), name="forgot-password"),
     path("reset-password/<uidb64>/<token>/", ResetPasswordView.as_view(), name="reset-password"),
+
+    # File Requests
+    path('requests/send/', CreateFileRequestView.as_view(), name='create-file-request'),
+    path('requests/sent/', SentRequestsView.as_view(), name='sent-requests'),
+    path('requests/received/', ReceivedRequestsView.as_view(), name='received-requests'),
+    path('requests/<uuid:request_id>/decline/', DeclineRequestView.as_view(), name='decline-request'),
+    path('requests/<uuid:request_id>/fulfill/', FulfillRequestView.as_view(), name='fulfill-request'),
+    path('requests/<uuid:request_id>/import/', ImportRequestFileView.as_view(), name='import-request-file'),
 
     # Files
     path('files/upload/', FileUploadView.as_view(), name='file-upload'),
