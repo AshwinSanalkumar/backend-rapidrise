@@ -96,9 +96,30 @@ class LogoutView(APIView):
 
 class UserDetailView(APIView):
     permission_classes = [IsAuthenticated]
+    
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+        
+    def patch(self, request):
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        current_password = request.data.get('currentPass')
+        new_password = request.data.get('newPass')
+
+        try:
+            AuthenticationService.change_password(request.user, current_password, new_password)
+            return Response({"message": "Password updated successfully."}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class ForgotPasswordView(APIView):
 
