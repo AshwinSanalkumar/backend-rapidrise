@@ -582,7 +582,7 @@ class FileStorageService:
 
         return {
             "total": total_limit / (1024 * 1024 * 1024),
-            "used": round(user.consumed_storage / (1024 * 1024 * 1024), 2), 
+            "used": round(user.consumed_storage / (1024 * 1024 ),2), 
             "trash_size": format_size(trash_bytes),
             "trash_raw": trash_bytes,
             "categories": categories
