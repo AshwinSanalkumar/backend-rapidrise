@@ -61,6 +61,32 @@ class WorkstationConsumer(AsyncWebsocketConsumer):
                     'sender_channel_name': self.channel_name
                 }
             )
+        elif text_data:
+            try:
+                data = json.loads(text_data)
+                if data.get('type') == 'cursor_update':
+                    await self.channel_layer.group_send(
+                        self.group_name,
+                        {
+                            'type': 'cursor_update',
+                            'x': data['x'],
+                            'y': data['y'],
+                            'sender_email': getattr(self.scope['user'], 'email', 'unknown'),
+                            'sender_channel_name': self.channel_name
+                        }
+                    )
+            except json.JSONDecodeError:
+                pass
+
+    async def cursor_update(self, event):
+        if self.channel_name != event['sender_channel_name']:
+            await self.send(text_data=json.dumps({
+                'type': 'cursor_update',
+                'x': event['x'],
+                'y': event['y'],
+                'sender_email': event['sender_email']
+            }))
+
 
     async def broadcast_bytes(self, event):
         if self.channel_name != event['sender_channel_name']:
