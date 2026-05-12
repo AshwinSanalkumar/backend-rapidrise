@@ -770,6 +770,38 @@ class WorkstationVersionDeleteView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+class WorkstationMemberView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, workstation_id, member_id):
+        """Update a member's role. Owner only."""
+        new_role = request.data.get('role')
+        if not new_role:
+            return Response({"error": "role is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            member = WorkstationService.update_member_role(request.user, workstation_id, member_id, new_role)
+            return Response({
+                "id": member.id,
+                "role": member.role,
+                "message": "Role updated successfully"
+            }, status=status.HTTP_200_OK)
+        except PermissionError as e:
+            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, workstation_id, member_id):
+        """Remove a collaborator. Owner only."""
+        try:
+            WorkstationService.remove_member(request.user, workstation_id, member_id)
+            return Response({"message": "Member removed"}, status=status.HTTP_200_OK)
+        except PermissionError as e:
+            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 # ---------------------------------------------------------------------------------------------
 # EXPORT VIEWS
 
@@ -803,11 +835,14 @@ class WorkstationExportView(APIView):
         # Add content - basic text area content
         document.add_paragraph(workstation.content)
 
+        buffer = BytesIO()
+        document.save(buffer)
         buffer.seek(0)
 
         response = HttpResponse(buffer.read(), content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
         response['Content-Disposition'] = f'attachment; filename="{workstation.title}.docx"'
         return response
+
 
 # ---------------------------------------------------------------------------------------------
 # FILE REQUEST VIEWS

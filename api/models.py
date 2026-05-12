@@ -89,8 +89,6 @@ class Workstation(models.Model):
     description = models.TextField(blank=True, null=True)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='owned_workstations')
     content = models.TextField(blank=True, default="")
-    visibility = models.CharField(max_length=20, choices=[('private', 'Private'), ('public', 'Public')], default='private')
-    template = models.CharField(max_length=50, default='blank')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

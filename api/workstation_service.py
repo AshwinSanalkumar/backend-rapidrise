@@ -126,6 +126,29 @@ class WorkstationService:
         return True
 
     @staticmethod
+    def update_member_role(requesting_user, workstation_id, member_id, new_role):
+        """Update a member's role. Only the workstation owner can do this."""
+        workstation = get_object_or_404(Workstation, id=workstation_id, owner=requesting_user)
+        if new_role not in ['EDITOR', 'VIEWER']:
+            raise ValueError("Invalid role. Must be EDITOR or VIEWER.")
+        member = get_object_or_404(WorkstationMember, id=member_id, workstation=workstation)
+        if member.role == 'OWNER':
+            raise PermissionError("Cannot change the owner's role.")
+        member.role = new_role
+        member.save()
+        return member
+
+    @staticmethod
+    def remove_member(requesting_user, workstation_id, member_id):
+        """Remove a collaborator. Only the workstation owner can do this."""
+        workstation = get_object_or_404(Workstation, id=workstation_id, owner=requesting_user)
+        member = get_object_or_404(WorkstationMember, id=member_id, workstation=workstation)
+        if member.role == 'OWNER':
+            raise PermissionError("Cannot remove the workstation owner.")
+        member.delete()
+        return True
+
+    @staticmethod
     def search_users(user, query):
         """Search for users to invite, excluding the current user."""
         if len(query) < 2:
