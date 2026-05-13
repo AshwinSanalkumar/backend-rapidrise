@@ -23,6 +23,7 @@ class FileStorageService:
         'application/msword',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         'text/plain'
     ]
     MEDIA_TYPES = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/wav']
@@ -32,7 +33,14 @@ class FileStorageService:
         'image/png',
         'application/pdf',
         'video/mp4',
-        'text/plain'
+        'text/plain',
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "audio/mpeg",
+        "video/mp4",
+
+
     }
 
     # =========================

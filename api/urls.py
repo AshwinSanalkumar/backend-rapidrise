@@ -10,6 +10,7 @@ from .views import (
     WorkstationListView, WorkstationDetailView, UserSearchView, 
     WorkstationInviteView, WorkstationInviteRespondView, WorkstationExportView,
     WorkstationVersionsView, WorkstationVersionRestoreView, WorkstationVersionDeleteView,
+    WorkstationMemberView,
     ForgotPasswordView, ResetPasswordView, ChangePasswordView,
     CreateFileRequestView, SentRequestsView, ReceivedRequestsView, DeclineRequestView, FulfillRequestView, ImportRequestFileView
 )
@@ -82,4 +83,5 @@ urlpatterns = [
     path('workstations/<uuid:workstation_id>/versions/', WorkstationVersionsView.as_view(), name='workstation-versions'),
     path('workstations/<uuid:workstation_id>/versions/<uuid:version_id>/restore/', WorkstationVersionRestoreView.as_view(), name='workstation-version-restore'),
     path('workstations/<uuid:workstation_id>/versions/<uuid:version_id>/delete/', WorkstationVersionDeleteView.as_view(), name='workstation-version-delete'),
+    path('workstations/<uuid:workstation_id>/members/<int:member_id>/', WorkstationMemberView.as_view(), name='workstation-member'),
 ]

@@ -132,7 +132,7 @@ class WorkstationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Workstation
-        fields = ['id', 'title', 'description', 'content', 'owner', 'owner_name', 'owner_email', 'visibility', 'template', 'members', 'member_count', 'created_at', 'updated_at']
+        fields = ['id', 'title', 'description', 'content', 'owner', 'owner_name', 'owner_email', 'members', 'member_count', 'created_at', 'updated_at']
         read_only_fields = ['id', 'owner', 'created_at', 'updated_at']
 
     def get_owner_name(self, obj):
