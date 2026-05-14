@@ -1,7 +1,6 @@
 from django.urls import path
 from .views import (
     PublicFileView, RegisterView, FileUploadView, FileListView, FolderDeleteView, 
-    CreateSharedLinkView, RevokeSharedLinkView, ListSharedLinksView, FolderUpdateView, 
     FolderContentUploadView, FolderContentDeleteView, TrashView, RestoreFileView, 
     RestoreAllFilesView, EmptyTrashView, FavoritesView, SoftDeleteFile, FileDetailView, 
     FileUpdateView, CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView, 
@@ -12,7 +11,8 @@ from .views import (
     WorkstationVersionsView, WorkstationVersionRestoreView, WorkstationVersionDeleteView,
     WorkstationMemberView,
     ForgotPasswordView, ResetPasswordView, ChangePasswordView,
-    CreateFileRequestView, SentRequestsView, ReceivedRequestsView, DeclineRequestView, FulfillRequestView, ImportRequestFileView, DeleteRequestView
+    CreateFileRequestView, SentRequestsView, ReceivedRequestsView, DeclineRequestView, FulfillRequestView, ImportRequestFileView, DeleteRequestView,
+    CreateSharedLinkView, RevokeSharedLinkView, ListSharedLinksView, FolderUpdateView, BulkShareView
 )
 
 urlpatterns = [
@@ -62,6 +62,7 @@ urlpatterns = [
     path('trash/empty/', EmptyTrashView.as_view(), name='empty-trash'),
 
     # Sharing
+    path('files/bulk-share/', BulkShareView.as_view(), name='bulk-share-files'),
     path('files/<str:file_id>/share/', CreateSharedLinkView.as_view(), name='generate-share-link'),
     path('files/shared-links/', ListSharedLinksView.as_view(), name='list-shared-links'),
     path('files/share/revoke/<str:token>/', RevokeSharedLinkView.as_view(), name='revoke-share-link'),

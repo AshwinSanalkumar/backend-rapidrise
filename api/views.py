@@ -497,6 +497,53 @@ class FolderContentDeleteView(APIView):
     
 #---------------------------------------------------------------------------------------------        
 #FILE SHARE VIEWS
+import zipfile
+from io import BytesIO
+from django.core.files.base import ContentFile
+from django.utils import timezone
+
+class BulkShareView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        file_ids = request.data.get('file_ids', [])
+        if not file_ids:
+            return Response({"error": "No files provided"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        buffer = BytesIO()
+        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for fid in file_ids:
+                try:
+                    f = UserFile.objects.get(id=fid, owner=request.user)
+                    zf.writestr(f.filename, f.content.read())
+                except Exception:
+                    continue
+        buffer.seek(0)
+
+        zip_name = f"Shared_Batch_{timezone.now().strftime('%Y%m%d%H%M%S')}.zip"
+        zip_obj = ContentFile(buffer.read(), name=zip_name)
+        zip_obj.content_type = 'application/zip'
+        
+        new_file = FileStorageService.process_and_store_file(
+            user=request.user,
+            file_obj=zip_obj,
+            display_name=f"Bulk Shared Archive ({len(file_ids)} files)",
+            description="[SYSTEM_INTERNAL_SHARE]",
+            consume_quota=False
+        )
+        
+        result, error = FileShareService.share_file_via_email(
+            file_id=str(new_file.id),
+            user=request.user,
+            request=request,
+            data=request.data
+        )
+
+        if error:
+            return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(result, status=status.HTTP_201_CREATED)
+
 class CreateSharedLinkView(APIView):
     permission_classes = [IsAuthenticated]
 
