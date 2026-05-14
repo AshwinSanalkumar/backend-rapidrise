@@ -320,6 +320,15 @@ class RecentFilesView(APIView):
         serializer = UserFileSerializer(files, many=True)
         return Response(serializer.data)
 
+class ClearRecentFilesView(APIView):
+    permission_classes = [IsAuthenticated]
+    """
+    api: api/files/recents/clear/
+    Clears the recent history by nullifying last_accessed_at for all user files.
+    """
+    def delete(self, request):
+        UserFile.objects.filter(owner=request.user).update(last_accessed_at=None)
+        return Response({"status": "success", "message": "Activity history cleared."})
 
 class UploadHistoryView(APIView):
     permission_classes = [IsAuthenticated]
