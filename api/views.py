@@ -900,6 +900,17 @@ class DeclineRequestView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+class DeleteRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, request_id):
+        try:
+            RequestService.delete_request(request.user, request_id)
+            return Response({"message": "Request deleted."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 class FulfillRequestView(APIView):
     permission_classes = [IsAuthenticated]
 

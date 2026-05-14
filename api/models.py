@@ -138,6 +138,11 @@ class WorkstationVersion(models.Model):
         db_table = "WorkstationVersions"
         ordering = ['-created_at']
 
+def default_file_request_expiry():
+    from datetime import timedelta
+    from django.utils import timezone
+    return timezone.now() + timedelta(hours=24)
+
 class FileRequest(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_file_requests')
@@ -145,6 +150,7 @@ class FileRequest(models.Model):
     note = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=[('pending', 'Pending'), ('fulfilled', 'Fulfilled'), ('declined', 'Declined')], default='pending')
     files = models.ManyToManyField(UserFile, related_name='file_requests', blank=True)
+    expires_at = models.DateTimeField(default=default_file_request_expiry)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

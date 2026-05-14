@@ -12,7 +12,7 @@ from .views import (
     WorkstationVersionsView, WorkstationVersionRestoreView, WorkstationVersionDeleteView,
     WorkstationMemberView,
     ForgotPasswordView, ResetPasswordView, ChangePasswordView,
-    CreateFileRequestView, SentRequestsView, ReceivedRequestsView, DeclineRequestView, FulfillRequestView, ImportRequestFileView
+    CreateFileRequestView, SentRequestsView, ReceivedRequestsView, DeclineRequestView, FulfillRequestView, ImportRequestFileView, DeleteRequestView
 )
 
 urlpatterns = [
@@ -31,6 +31,7 @@ urlpatterns = [
     path('requests/sent/', SentRequestsView.as_view(), name='sent-requests'),
     path('requests/received/', ReceivedRequestsView.as_view(), name='received-requests'),
     path('requests/<uuid:request_id>/decline/', DeclineRequestView.as_view(), name='decline-request'),
+    path('requests/<uuid:request_id>/delete/', DeleteRequestView.as_view(), name='delete-request'),
     path('requests/<uuid:request_id>/fulfill/', FulfillRequestView.as_view(), name='fulfill-request'),
     path('requests/<uuid:request_id>/import/', ImportRequestFileView.as_view(), name='import-request-file'),
 
