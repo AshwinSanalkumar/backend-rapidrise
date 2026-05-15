@@ -728,9 +728,7 @@ class WorkstationListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from rest_framework.pagination import PageNumberPagination
-        paginator = PageNumberPagination()
-        paginator.page_size = 5
+        paginator = StandardPagination()
         workstations = WorkstationService.get_user_workstations(request.user)
         result_page = paginator.paginate_queryset(workstations, request)
         serializer = WorkstationSerializer(result_page, many=True)
