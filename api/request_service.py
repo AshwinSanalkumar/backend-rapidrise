@@ -2,6 +2,7 @@ from django.shortcuts import get_object_or_404
 from .models import FileRequest, User, UserFile
 from .file_service import FileStorageService
 from uuid import uuid4
+from django.utils import timezone
 
 class RequestService:
     @staticmethod
@@ -20,12 +21,18 @@ class RequestService:
         return file_request
 
     @staticmethod
+    def delete_request(user, request_id):
+        file_request = get_object_or_404(FileRequest, id=request_id, sender=user)
+        file_request.delete()
+        return True
+
+    @staticmethod
     def get_sent_requests(user):
-        return FileRequest.objects.filter(sender=user)
+        return FileRequest.objects.filter(sender=user, expires_at__gt=timezone.now())
 
     @staticmethod
     def get_received_requests(user):
-        return FileRequest.objects.filter(recipient=user)
+        return FileRequest.objects.filter(recipient=user, expires_at__gt=timezone.now())
 
     @staticmethod
     def decline_request(user, request_id):
@@ -43,6 +50,9 @@ class RequestService:
         
         if file_request.status != 'pending':
             raise ValueError("Request is already processed.")
+            
+        if file_request.expires_at <= timezone.now():
+            raise ValueError("Request has expired.")
 
         if not file_objs:
             raise ValueError("No files uploaded.")

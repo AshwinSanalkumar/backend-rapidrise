@@ -24,7 +24,9 @@ class FileStorageService:
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'application/vnd.ms-excel',
         'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'text/plain'
+        'text/plain',
+        'application/zip',
+        'application/x-zip-compressed'
     ]
     MEDIA_TYPES = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/wav']
     
@@ -38,9 +40,9 @@ class FileStorageService:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "audio/mpeg",
-        "video/mp4",
-
-
+        "audio/mpeg",
+        "application/zip",
+        "application/x-zip-compressed"
     }
 
     # =========================
@@ -53,7 +55,7 @@ class FileStorageService:
         queryset = UserFile.objects.filter(
             owner=user, 
             is_deleted=False
-        )
+        ).exclude(description='[SYSTEM_INTERNAL_SHARE]')
         
         if favorites_only:
             queryset = queryset.filter(is_favorite=True)
@@ -88,12 +90,12 @@ class FileStorageService:
         return sha256.hexdigest()
 
     @staticmethod
-    def validate_file(file_obj):
+    def validate_file(file_obj, check_size=True):
         """
         Validate file size and MIME type.
         """
         # Size validation
-        if file_obj.size > settings.MAX_UPLOAD_SIZE:
+        if check_size and file_obj.size > settings.MAX_UPLOAD_SIZE:
             max_mb = settings.MAX_UPLOAD_SIZE / (1024 * 1024)
             raise ValidationError(f"File exceeds {max_mb:.2f} MB limit.")
 
@@ -129,7 +131,7 @@ class FileStorageService:
         return f"{stem}({existing_count}){ext}"
 
     @staticmethod
-    def process_and_store_file(user, file_obj, display_name=None, description=None):
+    def process_and_store_file(user, file_obj, display_name=None, description=None, consume_quota=True):
         """
         Main upload handler:
         - validates file
@@ -141,10 +143,10 @@ class FileStorageService:
             from .models import User
             user_locked = User.objects.select_for_update().get(pk=user.pk)
 
-            if user_locked.consumed_storage + file_obj.size > user_locked.storage_limit_bytes:
+            if consume_quota and user_locked.consumed_storage + file_obj.size > user_locked.storage_limit_bytes:
                 raise ValidationError("Storage limit exceeded. Please clean up your vault.")
 
-            mime_type = FileStorageService.validate_file(file_obj)
+            mime_type = FileStorageService.validate_file(file_obj, check_size=consume_quota)
 
             # Important: compute_checksum reads the stream
             checksum = FileStorageService.compute_checksum(file_obj)
@@ -166,9 +168,9 @@ class FileStorageService:
                 mime_type=mime_type,
                 checksum=checksum
             )
-            
-            user_locked.consumed_storage += file_obj.size
-            user_locked.save(update_fields=['consumed_storage'])
+            if consume_quota:
+                user_locked.consumed_storage += file_obj.size
+                user_locked.save(update_fields=['consumed_storage'])
             
             return new_file
 
@@ -208,7 +210,7 @@ class FileStorageService:
         return UserFile.objects.filter(
             owner=user, 
             is_deleted=True
-        ).order_by('-deleted_at')
+        ).exclude(description='[SYSTEM_INTERNAL_SHARE]').order_by('-deleted_at')
 
     @staticmethod
     def soft_delete_file(user, file_instance):
@@ -414,7 +416,7 @@ class FileStorageService:
             owner=user,
             uploaded_at__range=(start_date, end_date),
             is_deleted=False
-        ).only('id', 'display_name', 'filename', 'file_size_bytes', 'uploaded_at').order_by('-uploaded_at')
+        ).exclude(description='[SYSTEM_INTERNAL_SHARE]').only('id', 'display_name', 'filename', 'file_size_bytes', 'uploaded_at').order_by('-uploaded_at')
 
         shares_qs = SharedLink.objects.filter(
             file__owner=user,
@@ -424,7 +426,7 @@ class FileStorageService:
             'receipient_email', 'created_at', 'expires_at', 'is_revoked', 'message', 'file_id'
         ).order_by('-created_at')
 
-        total_uploads = UserFile.objects.filter(owner=user, is_deleted=False).count()
+        total_uploads = UserFile.objects.filter(owner=user, is_deleted=False).exclude(description='[SYSTEM_INTERNAL_SHARE]').count()
         total_shares = SharedLink.objects.filter(file__owner=user).count()
 
         history = defaultdict(list)
@@ -488,7 +490,7 @@ class FileStorageService:
             
             size_bytes = UserFile.objects.filter(
                 owner=user, uploaded_at__range=(start, end), is_deleted=False
-            ).aggregate(total=Sum('file_size_bytes'))['total'] or 0
+            ).exclude(description='[SYSTEM_INTERNAL_SHARE]').aggregate(total=Sum('file_size_bytes'))['total'] or 0
             
             daily.append({
                 "label": day.strftime("%b %d"),
@@ -504,7 +506,7 @@ class FileStorageService:
             
             count = UserFile.objects.filter(
                 owner=user, uploaded_at__range=(start, end), is_deleted=False
-            ).count()
+            ).exclude(description='[SYSTEM_INTERNAL_SHARE]').count()
             
             weekly.append({
                 "label": f"{start.strftime('%b %d')} - {end.strftime('%b %d')}",
@@ -537,7 +539,7 @@ class FileStorageService:
                 owner=user, uploaded_at__lte=month_end
             ).filter(
                 Q(is_deleted=False) | Q(deleted_at__gt=month_end)
-            ).aggregate(total=Sum('file_size_bytes'))['total'] or 0
+            ).exclude(description='[SYSTEM_INTERNAL_SHARE]').aggregate(total=Sum('file_size_bytes'))['total'] or 0
             
             limit = user.storage_limit_bytes
             percentage = (size_at_point / limit * 100) if limit > 0 else 0
@@ -561,14 +563,14 @@ class FileStorageService:
         """
         from django.db.models import Case, When, Value, IntegerField, Q
         
-        stats = UserFile.objects.filter(owner=user, is_deleted=False).aggregate(
+        stats = UserFile.objects.filter(owner=user, is_deleted=False).exclude(description='[SYSTEM_INTERNAL_SHARE]').aggregate(
             images_size=Sum(Case(When(mime_type__in=FileStorageService.IMAGE_TYPES, then='file_size_bytes'), default=0, output_field=IntegerField())),
             docs_size=Sum(Case(When(mime_type__in=FileStorageService.DOC_TYPES, then='file_size_bytes'), default=0, output_field=IntegerField())),
             media_size=Sum(Case(When(mime_type__in=FileStorageService.MEDIA_TYPES, then='file_size_bytes'), default=0, output_field=IntegerField())),
             others_size=Sum(Case(When(~Q(mime_type__in=FileStorageService.IMAGE_TYPES + FileStorageService.DOC_TYPES + FileStorageService.MEDIA_TYPES), then='file_size_bytes'), default=0, output_field=IntegerField()))
         )
 
-        trash_stats = UserFile.objects.filter(owner=user, is_deleted=True).aggregate(trash_size=Sum('file_size_bytes'))
+        trash_stats = UserFile.objects.filter(owner=user, is_deleted=True).exclude(description='[SYSTEM_INTERNAL_SHARE]').aggregate(trash_size=Sum('file_size_bytes'))
         trash_bytes = trash_stats['trash_size'] or 0
 
         total_active_bytes = (stats['images_size'] or 0) + (stats['docs_size'] or 0) + \
@@ -602,7 +604,7 @@ class FileStorageService:
         Returns discovery files (large files) or category-specific files.
         """
         DISCOVERY_THRESHOLD_BYTES = 50 * 1024 * 1024
-        queryset = UserFile.objects.filter(owner=user, is_deleted=False)
+        queryset = UserFile.objects.filter(owner=user, is_deleted=False).exclude(description='[SYSTEM_INTERNAL_SHARE]')
         
         if category and category != 'All':
             if category == 'Images':

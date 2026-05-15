@@ -14,6 +14,14 @@ class UserSerializer(serializers.ModelSerializer):
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip()
 
+    def validate_dob(self, value):
+        from datetime import date
+        today = date.today()
+        age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
+        if age < 15:
+            raise serializers.ValidationError("You must be at least 15 years old.")
+        return value
+
 class RegistrationSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)
     first_name = serializers.CharField(max_length=150)
@@ -47,6 +55,28 @@ class RegistrationSerializer(serializers.Serializer):
     def validate_email(self, value):
         if User.objects.filter(email=value.lower()).exists():
             raise serializers.ValidationError('A user with this email already exists.')
+        return value
+
+    def validate_dob(self, value):
+        from datetime import date
+        today = date.today()
+        age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
+        if age < 15:
+            raise serializers.ValidationError("You must be at least 15 years old to register.")
+        return value
+
+class PasswordValidationSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_password(self, value):
+        if not re.search(r"[a-z]", value):
+            raise serializers.ValidationError("Password Must contain atleast One lower case ")
+        if not re.search(r"[A-Z]", value):
+            raise serializers.ValidationError("Password Must contain atleast One Uppercase")
+        if not re.search(r"[!@#$%^&*()]", value):
+            raise serializers.ValidationError("Password Must contain atleast One special char")
+        if not re.search(r"[0-9]", value):
+            raise serializers.ValidationError("Password Must contain atleast One Number")
         return value
 
 class UserFileSerializer(serializers.ModelSerializer):

@@ -4,7 +4,8 @@ from rest_framework import status
 from .serializers import (
     RegistrationSerializer, UserFileSerializer, FolderSerializer, 
     SharedLinkSerializer, UserSerializer, WorkstationSerializer,
-    WorkstationInviteSerializer, UserSearchSerializer, WorkstationVersionSerializer
+    WorkstationInviteSerializer, UserSearchSerializer, WorkstationVersionSerializer,
+    PasswordValidationSerializer
 )
 from .auth_service import AuthenticationService
 from .file_service import FileStorageService
@@ -15,6 +16,7 @@ from django.db import models
 from .models import User, UserFile, UserFolder, SharedLink, Workstation, WorkstationInvite, WorkstationMember
 from uuid import UUID
 from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.views.decorators.clickjacking import xframe_options_exempt
@@ -115,6 +117,9 @@ class ChangePasswordView(APIView):
         current_password = request.data.get('currentPass')
         new_password = request.data.get('newPass')
 
+        serializer = PasswordValidationSerializer(data={'password': new_password})
+        serializer.is_valid(raise_exception=True)
+
         try:
             AuthenticationService.change_password(request.user, current_password, new_password)
             return Response({"message": "Password updated successfully."}, status=status.HTTP_200_OK)
@@ -156,11 +161,8 @@ class ResetPasswordView(APIView):
 
         password = request.data.get("password")
 
-        if not password:
-            return Response(
-                {"error": "Password is required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        serializer = PasswordValidationSerializer(data={'password': password})
+        serializer.is_valid(raise_exception=True)
 
         success, message = (
             AuthenticationService.reset_password(
@@ -205,6 +207,10 @@ class FileUploadView(APIView):
             ) 
             serializer = UserFileSerializer(new_file)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            # Extract just the message string from the ValidationError detail
+            msg = e.detail[0] if isinstance(e.detail, list) else e.detail
+            return Response({"error": str(msg)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -320,6 +326,15 @@ class RecentFilesView(APIView):
         serializer = UserFileSerializer(files, many=True)
         return Response(serializer.data)
 
+class ClearRecentFilesView(APIView):
+    permission_classes = [IsAuthenticated]
+    """
+    api: api/files/recents/clear/
+    Clears the recent history by nullifying last_accessed_at for all user files.
+    """
+    def delete(self, request):
+        UserFile.objects.filter(owner=request.user).update(last_accessed_at=None)
+        return Response({"status": "success", "message": "Activity history cleared."})
 
 class UploadHistoryView(APIView):
     permission_classes = [IsAuthenticated]
@@ -497,6 +512,53 @@ class FolderContentDeleteView(APIView):
     
 #---------------------------------------------------------------------------------------------        
 #FILE SHARE VIEWS
+import zipfile
+from io import BytesIO
+from django.core.files.base import ContentFile
+from django.utils import timezone
+
+class BulkShareView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        file_ids = request.data.get('file_ids', [])
+        if not file_ids:
+            return Response({"error": "No files provided"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        buffer = BytesIO()
+        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for fid in file_ids:
+                try:
+                    f = UserFile.objects.get(id=fid, owner=request.user)
+                    zf.writestr(f.filename, f.content.read())
+                except Exception:
+                    continue
+        buffer.seek(0)
+
+        zip_name = f"Shared_Batch_{timezone.now().strftime('%Y%m%d%H%M%S')}.zip"
+        zip_obj = ContentFile(buffer.read(), name=zip_name)
+        zip_obj.content_type = 'application/zip'
+        
+        new_file = FileStorageService.process_and_store_file(
+            user=request.user,
+            file_obj=zip_obj,
+            display_name=f"Bulk Shared Archive ({len(file_ids)} files)",
+            description="[SYSTEM_INTERNAL_SHARE]",
+            consume_quota=False
+        )
+        
+        result, error = FileShareService.share_file_via_email(
+            file_id=str(new_file.id),
+            user=request.user,
+            request=request,
+            data=request.data
+        )
+
+        if error:
+            return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(result, status=status.HTTP_201_CREATED)
+
 class CreateSharedLinkView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -666,9 +728,11 @@ class WorkstationListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        paginator = StandardPagination()
         workstations = WorkstationService.get_user_workstations(request.user)
-        serializer = WorkstationSerializer(workstations, many=True)
-        return Response(serializer.data)
+        result_page = paginator.paginate_queryset(workstations, request)
+        serializer = WorkstationSerializer(result_page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
         workstation = WorkstationService.create_workstation(request.user, request.data)
@@ -896,6 +960,17 @@ class DeclineRequestView(APIView):
             return Response({"message": "Request declined."}, status=status.HTTP_200_OK)
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class DeleteRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, request_id):
+        try:
+            RequestService.delete_request(request.user, request_id)
+            return Response({"message": "Request deleted."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

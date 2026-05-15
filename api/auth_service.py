@@ -143,6 +143,18 @@ If you did not request this, please ignore this email.
         if not token_generator.check_token(user, token):
             return False, "Token expired or invalid"
 
+        import re
+        if len(password) < 8:
+            return False, "Password must be at least 8 characters long"
+        if not re.search(r"[a-z]", password):
+            return False, "Password Must contain atleast One lower case"
+        if not re.search(r"[A-Z]", password):
+            return False, "Password Must contain atleast One Uppercase"
+        if not re.search(r"[!@#$%^&*()]", password):
+            return False, "Password Must contain atleast One special char"
+        if not re.search(r"[0-9]", password):
+            return False, "Password Must contain atleast One Number"
+
         user.set_password(password)
         user.save()
 

@@ -1,18 +1,18 @@
 from django.urls import path
 from .views import (
     PublicFileView, RegisterView, FileUploadView, FileListView, FolderDeleteView, 
-    CreateSharedLinkView, RevokeSharedLinkView, ListSharedLinksView, FolderUpdateView, 
     FolderContentUploadView, FolderContentDeleteView, TrashView, RestoreFileView, 
     RestoreAllFilesView, EmptyTrashView, FavoritesView, SoftDeleteFile, FileDetailView, 
     FileUpdateView, CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView, 
     FolderCreateView, FolderListView, FolderContentView, HardDeleteView, UploadHistoryView, 
-    RecentFilesView, UserDetailView, DuplicateFilesView, CleanupDuplicatesView, StorageStatsView, StorageTrendsView, LargeFilesView,
+    RecentFilesView, ClearRecentFilesView, UserDetailView, DuplicateFilesView, CleanupDuplicatesView, StorageStatsView, StorageTrendsView, LargeFilesView,
     WorkstationListView, WorkstationDetailView, UserSearchView, 
     WorkstationInviteView, WorkstationInviteRespondView, WorkstationExportView,
     WorkstationVersionsView, WorkstationVersionRestoreView, WorkstationVersionDeleteView,
     WorkstationMemberView,
     ForgotPasswordView, ResetPasswordView, ChangePasswordView,
-    CreateFileRequestView, SentRequestsView, ReceivedRequestsView, DeclineRequestView, FulfillRequestView, ImportRequestFileView
+    CreateFileRequestView, SentRequestsView, ReceivedRequestsView, DeclineRequestView, FulfillRequestView, ImportRequestFileView, DeleteRequestView,
+    CreateSharedLinkView, RevokeSharedLinkView, ListSharedLinksView, FolderUpdateView, BulkShareView
 )
 
 urlpatterns = [
@@ -31,6 +31,7 @@ urlpatterns = [
     path('requests/sent/', SentRequestsView.as_view(), name='sent-requests'),
     path('requests/received/', ReceivedRequestsView.as_view(), name='received-requests'),
     path('requests/<uuid:request_id>/decline/', DeclineRequestView.as_view(), name='decline-request'),
+    path('requests/<uuid:request_id>/delete/', DeleteRequestView.as_view(), name='delete-request'),
     path('requests/<uuid:request_id>/fulfill/', FulfillRequestView.as_view(), name='fulfill-request'),
     path('requests/<uuid:request_id>/import/', ImportRequestFileView.as_view(), name='import-request-file'),
 
@@ -40,6 +41,7 @@ urlpatterns = [
     path('files/favorite/<str:file_id>/', FavoritesView.as_view(), name='add-favorites'),
     path('files/list/', FileListView.as_view(), name='file-list'),
     path('files/recents/', RecentFilesView.as_view(), name='file-recents'),
+    path('files/recents/clear/', ClearRecentFilesView.as_view(), name='clear-file-recents'),
     path('files/update/<str:file_id>/', FileUpdateView.as_view(), name='file-update'),
     path('files/history/', UploadHistoryView.as_view(), name='file-history'),
     path('files/delete/<str:file_id>/', SoftDeleteFile.as_view(), name='soft-delete'),
@@ -61,6 +63,7 @@ urlpatterns = [
     path('trash/empty/', EmptyTrashView.as_view(), name='empty-trash'),
 
     # Sharing
+    path('files/bulk-share/', BulkShareView.as_view(), name='bulk-share-files'),
     path('files/<str:file_id>/share/', CreateSharedLinkView.as_view(), name='generate-share-link'),
     path('files/shared-links/', ListSharedLinksView.as_view(), name='list-shared-links'),
     path('files/share/revoke/<str:token>/', RevokeSharedLinkView.as_view(), name='revoke-share-link'),
