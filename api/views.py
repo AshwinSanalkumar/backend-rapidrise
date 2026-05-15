@@ -4,7 +4,8 @@ from rest_framework import status
 from .serializers import (
     RegistrationSerializer, UserFileSerializer, FolderSerializer, 
     SharedLinkSerializer, UserSerializer, WorkstationSerializer,
-    WorkstationInviteSerializer, UserSearchSerializer, WorkstationVersionSerializer
+    WorkstationInviteSerializer, UserSearchSerializer, WorkstationVersionSerializer,
+    PasswordValidationSerializer
 )
 from .auth_service import AuthenticationService
 from .file_service import FileStorageService
@@ -15,6 +16,7 @@ from django.db import models
 from .models import User, UserFile, UserFolder, SharedLink, Workstation, WorkstationInvite, WorkstationMember
 from uuid import UUID
 from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.views.decorators.clickjacking import xframe_options_exempt
@@ -115,6 +117,9 @@ class ChangePasswordView(APIView):
         current_password = request.data.get('currentPass')
         new_password = request.data.get('newPass')
 
+        serializer = PasswordValidationSerializer(data={'password': new_password})
+        serializer.is_valid(raise_exception=True)
+
         try:
             AuthenticationService.change_password(request.user, current_password, new_password)
             return Response({"message": "Password updated successfully."}, status=status.HTTP_200_OK)
@@ -156,11 +161,8 @@ class ResetPasswordView(APIView):
 
         password = request.data.get("password")
 
-        if not password:
-            return Response(
-                {"error": "Password is required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        serializer = PasswordValidationSerializer(data={'password': password})
+        serializer.is_valid(raise_exception=True)
 
         success, message = (
             AuthenticationService.reset_password(
@@ -205,6 +207,10 @@ class FileUploadView(APIView):
             ) 
             serializer = UserFileSerializer(new_file)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            # Extract just the message string from the ValidationError detail
+            msg = e.detail[0] if isinstance(e.detail, list) else e.detail
+            return Response({"error": str(msg)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -722,9 +728,13 @@ class WorkstationListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from rest_framework.pagination import PageNumberPagination
+        paginator = PageNumberPagination()
+        paginator.page_size = 5
         workstations = WorkstationService.get_user_workstations(request.user)
-        serializer = WorkstationSerializer(workstations, many=True)
-        return Response(serializer.data)
+        result_page = paginator.paginate_queryset(workstations, request)
+        serializer = WorkstationSerializer(result_page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
         workstation = WorkstationService.create_workstation(request.user, request.data)

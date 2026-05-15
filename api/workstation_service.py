@@ -15,6 +15,11 @@ class WorkstationService:
     @staticmethod
     def create_workstation(user, data):
         """Create a new workstation and make the user the owner/member."""
+        # Limit to 10 workstations per user
+        if Workstation.objects.filter(owner=user).count() >= 10:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("You have reached the maximum limit of 10 workstations.")
+
         serializer = WorkstationSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         workstation = serializer.save(owner=user)
