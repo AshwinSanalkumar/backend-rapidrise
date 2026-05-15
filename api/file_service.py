@@ -28,7 +28,7 @@ class FileStorageService:
         'application/zip',
         'application/x-zip-compressed'
     ]
-    MEDIA_TYPES = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/wav']
+    MEDIA_TYPES = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/wav']
     
     ALLOWED_TYPES = {
         'image/jpeg',
@@ -40,7 +40,8 @@ class FileStorageService:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "audio/mpeg",
-        "audio/mpeg",
+        "audio/mp4",
+        'audio/x-m4a',
         "application/zip",
         "application/x-zip-compressed"
     }
