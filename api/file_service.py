@@ -30,21 +30,7 @@ class FileStorageService:
     ]
     MEDIA_TYPES = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/wav']
     
-    ALLOWED_TYPES = {
-        'image/jpeg',
-        'image/png',
-        'application/pdf',
-        'video/mp4',
-        'text/plain',
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "audio/mpeg",
-        "audio/mp4",
-        'audio/x-m4a',
-        "application/zip",
-        "application/x-zip-compressed"
-    }
+    ALLOWED_TYPES = settings.ALLOWED_TYPES
 
     # =========================
     # Retrieval & Search

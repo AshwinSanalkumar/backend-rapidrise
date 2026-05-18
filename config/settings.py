@@ -168,9 +168,24 @@ CORS_ALLOW_CREDENTIALS = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-MAX_UPLOAD_SIZE = 50 * 1024 * 1024
+MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 
-
+ALLOWED_TYPES={
+        'image/jpeg',
+        'image/png',
+        'application/pdf',
+        'video/mp4',
+        'text/plain',
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "audio/mpeg",
+        "audio/mp4",
+        'audio/x-m4a',
+        "application/zip",
+        "application/x-zip-compressed",
+        "application/octet-stream"
+    }
 
 # The backend to use for sending emails
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
