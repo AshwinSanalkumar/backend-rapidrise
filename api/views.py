@@ -732,7 +732,11 @@ class WorkstationListView(APIView):
         workstations = WorkstationService.get_user_workstations(request.user)
         result_page = paginator.paginate_queryset(workstations, request)
         serializer = WorkstationSerializer(result_page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        
+        response = paginator.get_paginated_response(serializer.data)
+        # Add a custom field to track the total workstations owned by this user
+        response.data['owned_count'] = Workstation.objects.filter(owner=request.user).count()
+        return response
 
     def post(self, request):
         workstation = WorkstationService.create_workstation(request.user, request.data)
