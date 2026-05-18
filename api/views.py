@@ -5,7 +5,7 @@ from .serializers import (
     RegistrationSerializer, UserFileSerializer, FolderSerializer, 
     SharedLinkSerializer, UserSerializer, WorkstationSerializer,
     WorkstationInviteSerializer, UserSearchSerializer, WorkstationVersionSerializer,
-    PasswordValidationSerializer
+    PasswordValidationSerializer, ChunkedUploadSerializer
 )
 from .auth_service import AuthenticationService
 from .file_service import FileStorageService
@@ -13,7 +13,7 @@ from .folder_service import FolderService
 from .fileShare_service import FileShareService
 from rest_framework.permissions import  IsAuthenticated, AllowAny
 from django.db import models
-from .models import User, UserFile, UserFolder, SharedLink, Workstation, WorkstationInvite, WorkstationMember
+from .models import User, UserFile, UserFolder, SharedLink, Workstation, WorkstationInvite, WorkstationMember, ChunkedUpload
 from uuid import UUID
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import ValidationError
@@ -800,6 +800,82 @@ class WorkstationInviteRespondView(APIView):
             return Response(result)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ChunkedUploadInitView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        filename = request.data.get('filename')
+        total_size = request.data.get('total_size')
+        if not filename or not total_size:
+            return Response({"error": "filename and total_size are required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            chunked_upload = FileStorageService.init_chunked_upload(request.user, filename, int(total_size))
+            return Response(ChunkedUploadSerializer(chunked_upload).data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class ChunkedUploadChunkView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        upload_id = request.data.get('upload_id')
+        offset = request.data.get('offset')
+        chunk_file = request.FILES.get('chunk')
+        
+        if not all([upload_id, offset, chunk_file]):
+            return Response({"error": "upload_id, offset, and chunk are required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        chunked_upload = get_object_or_404(ChunkedUpload, upload_id=upload_id, user=request.user)
+        
+        try:
+            FileStorageService.save_chunk(chunked_upload, chunk_file, int(offset))
+            return Response(ChunkedUploadSerializer(chunked_upload).data)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class ChunkedUploadCompleteView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        upload_id = request.data.get('upload_id')
+        display_name = request.data.get('display_name')
+        description = request.data.get('description')
+        
+        if not upload_id:
+            return Response({"error": "upload_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        chunked_upload = get_object_or_404(ChunkedUpload, upload_id=upload_id, user=request.user)
+        
+        try:
+            user_file = FileStorageService.finalize_chunked_upload(chunked_upload, display_name, description)
+            return Response(UserFileSerializer(user_file).data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class ChunkedUploadStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, upload_id):
+        chunked_upload = get_object_or_404(ChunkedUpload, upload_id=upload_id, user=request.user)
+        return Response(ChunkedUploadSerializer(chunked_upload).data)
+
+    def delete(self, request, upload_id):
+        chunked_upload = get_object_or_404(ChunkedUpload, upload_id=upload_id, user=request.user)
+        import os
+        if os.path.exists(chunked_upload.file_path):
+            os.remove(chunked_upload.file_path)
+        chunked_upload.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+class ChunkedUploadListView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        active_uploads = ChunkedUpload.objects.filter(user=request.user, status='uploading')
+        return Response(ChunkedUploadSerializer(active_uploads, many=True).data)
 
 class WorkstationVersionsView(APIView):
     permission_classes = [IsAuthenticated]

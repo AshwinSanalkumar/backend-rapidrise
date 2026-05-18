@@ -87,7 +87,11 @@ class FileStorageService:
             raise ValidationError(f"File exceeds {max_mb:.2f} MB limit.")
 
         # MIME validation (basic - header based)
-        mime_type = file_obj.content_type or 'application/octet-stream'
+        import mimetypes
+        mime_type = getattr(file_obj, 'content_type', None)
+        if not mime_type:
+            mime_type = mimetypes.guess_type(file_obj.name)[0] or 'application/octet-stream'
+
         if mime_type not in FileStorageService.ALLOWED_TYPES:
             raise ValidationError(f"File type '{mime_type}' is not supported.")
 
@@ -160,6 +164,83 @@ class FileStorageService:
                 user_locked.save(update_fields=['consumed_storage'])
             
             return new_file
+
+    @staticmethod
+    def init_chunked_upload(user, filename, total_size):
+        """Initializes a chunked upload session."""
+        import os
+        from .models import ChunkedUpload
+        
+        # Check quota first
+        if user.consumed_storage + total_size > user.storage_limit_bytes:
+            raise ValidationError("Storage limit exceeded.")
+
+        # Create temporary file path
+        temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp_uploads')
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
+            
+        import uuid
+        temp_filename = f"{uuid.uuid4()}_{filename}"
+        file_path = os.path.join(temp_dir, temp_filename)
+        
+        chunked_upload = ChunkedUpload.objects.create(
+            user=user,
+            filename=filename,
+            total_size=total_size,
+            file_path=file_path
+        )
+        return chunked_upload
+
+    @staticmethod
+    def save_chunk(chunked_upload, chunk_file, offset):
+        """Saves a chunk of data to the temporary file."""
+        import os
+        
+        if chunked_upload.status != 'uploading':
+            raise ValidationError("Upload session is not active.")
+
+        # If it's a resume and offset is less than current_size, 
+        # we probably want to seek to that offset and overwrite if necessary, 
+        # but for simplicity let's assume sequential chunks for now.
+        
+        with open(chunked_upload.file_path, 'ab') as f:
+            f.write(chunk_file.read())
+            
+        chunked_upload.current_size = os.path.getsize(chunked_upload.file_path)
+        chunked_upload.save()
+        return chunked_upload
+
+    @staticmethod
+    def finalize_chunked_upload(chunked_upload, display_name=None, description=None):
+        """Finalizes the chunked upload by creating a UserFile record."""
+        import os
+        from django.core.files import File
+        
+        if chunked_upload.current_size < chunked_upload.total_size:
+            raise ValidationError("Upload incomplete.")
+
+        with open(chunked_upload.file_path, 'rb') as f:
+            from django.core.files import File
+            import mimetypes
+            django_file = File(f, name=chunked_upload.filename)
+            # Add content_type attribute for process_and_store_file/validate_file
+            django_file.content_type = mimetypes.guess_type(chunked_upload.filename)[0] or 'application/octet-stream'
+            
+            user_file = FileStorageService.process_and_store_file(
+                user=chunked_upload.user,
+                file_obj=django_file,
+                display_name=display_name,
+                description=description
+            )
+            
+        # Cleanup
+        chunked_upload.status = 'completed'
+        chunked_upload.save()
+        if os.path.exists(chunked_upload.file_path):
+            os.remove(chunked_upload.file_path)
+            
+        return user_file
 
     # =========================
     # File Operations

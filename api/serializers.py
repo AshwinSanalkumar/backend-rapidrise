@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import User
 import re
-from .models import User, UserFile, UserFolder, SharedLink, Workstation, WorkstationMember, WorkstationInvite, WorkstationVersion
+from .models import User, UserFile, UserFolder, SharedLink, Workstation, WorkstationMember, WorkstationInvite, WorkstationVersion, ChunkedUpload
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
@@ -210,3 +210,9 @@ class FileRequestSerializer(serializers.ModelSerializer):
 
     def get_sender_name(self, obj):
         return f"{obj.sender.first_name} {obj.sender.last_name}"
+
+class ChunkedUploadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChunkedUpload
+        fields = ['upload_id', 'filename', 'total_size', 'current_size', 'status', 'created_at']
+        read_only_fields = ['upload_id', 'current_size', 'status', 'created_at']
