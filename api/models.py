@@ -136,7 +136,21 @@ class WorkstationVersion(models.Model):
 
     class Meta:
         db_table = "WorkstationVersions"
-        ordering = ['-created_at']
+
+class ChunkedUpload(models.Model):
+    upload_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    filename = models.CharField(max_length=255)
+    total_size = models.BigIntegerField()
+    current_size = models.BigIntegerField(default=0)
+    file_path = models.CharField(max_length=500) # Temporary path on server
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=20, default='uploading') # uploading, completed, cancelled
+
+    class Meta:
+        db_table = "ChunkedUploads"
+        ordering = ['-updated_at']
 
 def default_file_request_expiry():
     from datetime import timedelta

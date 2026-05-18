@@ -12,7 +12,8 @@ from .views import (
     WorkstationMemberView,
     ForgotPasswordView, ResetPasswordView, ChangePasswordView,
     CreateFileRequestView, SentRequestsView, ReceivedRequestsView, DeclineRequestView, FulfillRequestView, ImportRequestFileView, DeleteRequestView,
-    CreateSharedLinkView, RevokeSharedLinkView, ListSharedLinksView, FolderUpdateView, BulkShareView
+    CreateSharedLinkView, RevokeSharedLinkView, ListSharedLinksView, FolderUpdateView, BulkShareView,
+    ChunkedUploadInitView, ChunkedUploadChunkView, ChunkedUploadCompleteView, ChunkedUploadStatusView, ChunkedUploadListView
 )
 
 urlpatterns = [
@@ -72,6 +73,13 @@ urlpatterns = [
     # Storage
     path('storage/duplicates/', DuplicateFilesView.as_view(), name='duplicate-files'),
     path('storage/cleanup-duplicates/', CleanupDuplicatesView.as_view(), name='cleanup-duplicates'),
+
+    # Chunked Uploads
+    path('files/chunked/init/', ChunkedUploadInitView.as_view(), name='chunked-upload-init'),
+    path('files/chunked/upload/', ChunkedUploadChunkView.as_view(), name='chunked-upload-chunk'),
+    path('files/chunked/complete/', ChunkedUploadCompleteView.as_view(), name='chunked-upload-complete'),
+    path('files/chunked/status/<uuid:upload_id>/', ChunkedUploadStatusView.as_view(), name='chunked-upload-status'),
+    path('files/chunked/active/', ChunkedUploadListView.as_view(), name='chunked-upload-active'),
     path('storage/stats/', StorageStatsView.as_view(), name='storage-stats'),
     path('storage/trends/', StorageTrendsView.as_view(), name='storage-trends'),
     path('storage/large-files/', LargeFilesView.as_view(), name='large-files'),
