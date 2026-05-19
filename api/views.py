@@ -67,24 +67,40 @@ class CookieTokenRefreshView(APIView):
     def post(self, request):
         refresh_token = request.COOKIES.get('refresh_token')
         if not refresh_token:
-            print("ERROR: No refresh_token cookie found in request")
             return Response({'error': 'No refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
+            from django.conf import settings
             token = RefreshToken(refresh_token)
-            access_token = str(token.access_token)
-
+            
             response = Response({'message': 'Token refreshed'})
             
             # Set Access Token Cookie
             response.set_cookie(
                 key='access_token',
-                value=access_token,
+                value=str(token.access_token),
                 httponly=True,
-                secure=False, # Set to True in production (HTTPS)
+                secure=False,
                 samesite='Lax',
-                max_age=300,
+                max_age=int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),
             )
+
+            # Handle Token Rotation
+            if settings.SIMPLE_JWT.get('ROTATE_REFRESH_TOKENS', False):
+                # We MUST manually trigger the rotation by updating the JTI and Expiry
+                token.set_jti()
+                token.set_exp()
+                
+                new_refresh = str(token)
+                response.set_cookie(
+                    key='refresh_token',
+                    value=new_refresh,
+                    httponly=True,
+                    secure=False,
+                    samesite='Lax',
+                    max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()),
+                )
+
             return response
         except Exception as e:
             return Response({'error': 'Invalid refresh token'}, status=status.HTTP_401_UNAUTHORIZED)

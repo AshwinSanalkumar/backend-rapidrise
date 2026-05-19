@@ -73,7 +73,7 @@ class AuthenticationService:
                 httponly=True,
                 secure=False, 
                 samesite='Lax',
-                max_age=300,   
+                max_age=int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),   
             )
 
         if refresh_token:
@@ -83,7 +83,7 @@ class AuthenticationService:
                 httponly=True,
                 secure=False,
                 samesite='Lax',
-                max_age=86400, 
+                max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()), 
             )
 
         return response
