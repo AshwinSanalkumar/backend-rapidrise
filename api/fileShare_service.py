@@ -1,4 +1,6 @@
 import threading
+import zipfile
+from io import BytesIO
 from uuid import UUID
 from datetime import timedelta
 from django.utils import timezone
@@ -6,6 +8,7 @@ from django.urls import reverse
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.files.base import ContentFile
 from .models import SharedLink, UserFile
 
 def send_email_async(email):
@@ -18,6 +21,48 @@ def send_email_async(email):
         pass
 
 class FileShareService:
+    @staticmethod
+    def bulk_share_files(user, file_ids, request, data):
+        """
+        Creates a zip archive of multiple files and shares it.
+        """
+        from .file_service import FileStorageService
+        
+        if not file_ids:
+            return None, "No files provided"
+
+        buffer = BytesIO()
+        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for fid in file_ids:
+                try:
+                    f = UserFile.objects.get(id=fid, owner=user)
+                    # Read content into memory for zipping
+                    zf.writestr(f.filename, f.content.read())
+                except Exception:
+                    continue
+        buffer.seek(0)
+
+        zip_name = f"Shared_Batch_{timezone.now().strftime('%Y%m%d%H%M%S')}.zip"
+        zip_obj = ContentFile(buffer.read(), name=zip_name)
+        zip_obj.content_type = 'application/zip'
+        
+        # Store the ghost file for sharing
+        new_file = FileStorageService.process_and_store_file(
+            user=user,
+            file_obj=zip_obj,
+            display_name=f"Bulk Shared Archive ({len(file_ids)} files)",
+            description="[SYSTEM_INTERNAL_SHARE]",
+            consume_quota=False
+        )
+        
+        # Use existing single share method
+        return FileShareService.share_file_via_email(
+            file_id=str(new_file.id),
+            user=user,
+            request=request,
+            data=data
+        )
+
     @staticmethod
     def share_file_via_email(file_id, user, request, data):
         try:
@@ -36,6 +81,11 @@ class FileShareService:
         except (ValueError, TypeError):
             duration = 60
 
+        try:
+            download_limit = int(data.get('download_limit', 5))
+        except (ValueError, TypeError):
+            download_limit = 5
+
         expiry = timezone.now() + timedelta(minutes=duration)
         
         created_links_info = []
@@ -45,7 +95,8 @@ class FileShareService:
             shared_link = SharedLink.objects.create(
                 file=file_obj, 
                 expires_at=expiry,
-                message=message
+                message=message,
+                download_limit=download_limit
             )
             token = shared_link.token
             full_url = f"{settings.FRONTEND_URL}/public/{token}"
@@ -56,7 +107,8 @@ class FileShareService:
                     file=file_obj,
                     expires_at=expiry,
                     receipient_email=email_addr,
-                    message=message
+                    message=message,
+                    download_limit=download_limit
                 )
                 token = shared_link.token
                 full_url = f"{settings.FRONTEND_URL}/public/{token}"
@@ -108,29 +160,51 @@ class FileShareService:
         thread.start()
 
     @staticmethod
-    def get_file_from_token(token_str):
+    def get_file_from_token(token_str, increment_type=None):
         """
-        Validates the token and returns the file object if access is permitted.
+        Validates the token and returns (file, shared_link, error).
+        increment_type: 'access' (link opened) or 'download' (file fetched).
         """
         try:
             file_token = UUID(token_str)
         except ValueError:
-            return None, "Invalid download link format."
+            return None, None, "Invalid download link format."
         try:
             shared_link = SharedLink.objects.get(token=file_token)
         except SharedLink.DoesNotExist:
-            return None, "Invalid link."
+            return None, None, "Invalid link."
             
         if shared_link.is_revoked:
-            return None, "This link has been revoked by the owner."
+            return None, None, "This link has been revoked by the owner."
             
         if timezone.now() > shared_link.expires_at:
-            return None, "This link has expired."
-        
-        shared_link.is_accessed = True
-        shared_link.accessed_at = timezone.now()
-        shared_link.save()
-        return shared_link.file, None
+            return None, None, "This link has expired."
+
+        # Logic for counters and limits
+        if increment_type == 'access':
+            if not shared_link.is_accessed:
+                shared_link.is_accessed = True
+                shared_link.save()
+        elif increment_type == 'download':
+            if shared_link.download_limit == 0:
+                return None, None, "This link is for preview only. Downloads are disabled."
+            
+            if shared_link.download_limit > 0 and shared_link.download_count >= shared_link.download_limit:
+                return None, None, "Download limit reached for this link."
+            
+            shared_link.download_count += 1
+            shared_link.save()
+
+        return shared_link.file, shared_link, None
+
+    @staticmethod
+    def get_public_tracking_headers(shared_link):
+        return {
+            'X-Download-Limit': str(shared_link.download_limit),
+            'X-Download-Count': str(shared_link.download_count),
+            'X-Expires-At': shared_link.expires_at.isoformat() if shared_link.expires_at else '',
+            'Access-Control-Expose-Headers': 'Content-Disposition, X-Download-Limit, X-Download-Count, X-Expires-At'
+        }
 
     @staticmethod
     def revoke_shared_link(token_str, user):

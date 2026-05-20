@@ -537,35 +537,9 @@ class BulkShareView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        file_ids = request.data.get('file_ids', [])
-        if not file_ids:
-            return Response({"error": "No files provided"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        buffer = BytesIO()
-        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for fid in file_ids:
-                try:
-                    f = UserFile.objects.get(id=fid, owner=request.user)
-                    zf.writestr(f.filename, f.content.read())
-                except Exception:
-                    continue
-        buffer.seek(0)
-
-        zip_name = f"Shared_Batch_{timezone.now().strftime('%Y%m%d%H%M%S')}.zip"
-        zip_obj = ContentFile(buffer.read(), name=zip_name)
-        zip_obj.content_type = 'application/zip'
-        
-        new_file = FileStorageService.process_and_store_file(
+        result, error = FileShareService.bulk_share_files(
             user=request.user,
-            file_obj=zip_obj,
-            display_name=f"Bulk Shared Archive ({len(file_ids)} files)",
-            description="[SYSTEM_INTERNAL_SHARE]",
-            consume_quota=False
-        )
-        
-        result, error = FileShareService.share_file_via_email(
-            file_id=str(new_file.id),
-            user=request.user,
+            file_ids=request.data.get('file_ids', []),
             request=request,
             data=request.data
         )
@@ -625,31 +599,43 @@ class PublicFileView(APIView):
     View used to access and view the file using a secure link.
     """
     def get(self, request, token):
-        file_obj, error = FileShareService.get_file_from_token(token)
-        if error:
-            error_status = status.HTTP_404_NOT_FOUND
-            if "already been used" in error:
-                error_status = status.HTTP_410_GONE
-            elif "format" in error:
-                error_status = status.HTTP_400_BAD_REQUEST   
-            return Response({"error": error}, status=error_status)
+        is_metadata = request.query_params.get('metadata') == 'true'
+        is_download = request.query_params.get('download') == 'true'
         
+        increment_type = None if is_metadata else ('download' if is_download else 'access')
+        
+        file_obj, shared_link, error = FileShareService.get_file_from_token(token, increment_type=increment_type)
+        if error:
+            # Return semantically correct HTTP codes so frontend can show the right screen
+            if 'expired' in error.lower():
+                return Response({"error": error}, status=status.HTTP_410_GONE)
+            elif 'revoked' in error.lower():
+                return Response({"error": error}, status=status.HTTP_403_FORBIDDEN)
+            elif any(msg in error for msg in ["already been used", "limit reached", "disabled", "preview only"]):
+                return Response({"error": error}, status=status.HTTP_403_FORBIDDEN)
+            elif "format" in error:
+                return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": error}, status=status.HTTP_404_NOT_FOUND)
+        
+        if is_metadata:
+            headers = FileShareService.get_public_tracking_headers(shared_link)
+            return Response({
+                'name': file_obj.filename,
+                'size': file_obj.content.size,
+                'type': file_obj.mime_type
+            }, headers=headers)
+
         file_handle = file_obj.content.open('rb')
         response = FileResponse(file_handle, content_type=file_obj.mime_type)
         response['Content-Disposition'] = f'inline; filename="{file_obj.filename}"'
+
+        # Add tracking headers via service
+        headers = FileShareService.get_public_tracking_headers(shared_link)
+        for key, value in headers.items():
+            response[key] = value
         
         return response
 
-    def head(self, request, token):
-        file_obj, error = FileShareService.get_file_from_token(token)
-        if error:
-            return Response({"error": error}, status=status.HTTP_404_NOT_FOUND)
-        
-        from django.http import HttpResponse
-        response = HttpResponse(content_type=file_obj.mime_type)
-        response['Content-Length'] = file_obj.content.size
-        response['Content-Disposition'] = f'inline; filename="{file_obj.filename}"'
-        return response
 
 class DuplicateFilesView(APIView):
     permission_classes = [IsAuthenticated]
