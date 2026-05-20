@@ -125,9 +125,9 @@ class SharedLinkSerializer(serializers.ModelSerializer):
         model = SharedLink
         fields = [
             'token', 'file', 'file_name', 'display_name', 'file_size',
-            'receipient_email', 'is_accessed', 'is_revoked', 
-            'revoked_at', 'expires_at', 'created_at', 'is_expired',
-            'message'
+            'receipient_email', 'is_accessed', 'access_count', 'download_count', 
+            'download_limit', 'is_revoked', 'revoked_at', 'expires_at', 
+            'created_at', 'is_expired', 'message'
         ]
 
 class WorkstationMemberSerializer(serializers.ModelSerializer):

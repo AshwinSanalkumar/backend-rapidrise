@@ -537,35 +537,9 @@ class BulkShareView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        file_ids = request.data.get('file_ids', [])
-        if not file_ids:
-            return Response({"error": "No files provided"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        buffer = BytesIO()
-        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for fid in file_ids:
-                try:
-                    f = UserFile.objects.get(id=fid, owner=request.user)
-                    zf.writestr(f.filename, f.content.read())
-                except Exception:
-                    continue
-        buffer.seek(0)
-
-        zip_name = f"Shared_Batch_{timezone.now().strftime('%Y%m%d%H%M%S')}.zip"
-        zip_obj = ContentFile(buffer.read(), name=zip_name)
-        zip_obj.content_type = 'application/zip'
-        
-        new_file = FileStorageService.process_and_store_file(
+        result, error = FileShareService.bulk_share_files(
             user=request.user,
-            file_obj=zip_obj,
-            display_name=f"Bulk Shared Archive ({len(file_ids)} files)",
-            description="[SYSTEM_INTERNAL_SHARE]",
-            consume_quota=False
-        )
-        
-        result, error = FileShareService.share_file_via_email(
-            file_id=str(new_file.id),
-            user=request.user,
+            file_ids=request.data.get('file_ids', []),
             request=request,
             data=request.data
         )
@@ -625,11 +599,23 @@ class PublicFileView(APIView):
     View used to access and view the file using a secure link.
     """
     def get(self, request, token):
-        file_obj, error = FileShareService.get_file_from_token(token)
+        is_download = request.query_params.get('download') == 'true'
+        is_track = request.query_params.get('track') == 'true'
+        
+        increment_type = 'download' if is_download else 'access'
+        
+        # If it's just a tracking ping, we only need the counter increment
+        if is_track:
+            _, shared_link, error = FileShareService.get_file_from_token(token, increment_type='access')
+            if error:
+                return Response({"error": error}, status=status.HTTP_404_NOT_FOUND)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        file_obj, shared_link, error = FileShareService.get_file_from_token(token, increment_type=increment_type)
         if error:
             error_status = status.HTTP_404_NOT_FOUND
-            if "already been used" in error:
-                error_status = status.HTTP_410_GONE
+            if any(msg in error for msg in ["already been used", "limit reached", "disabled"]):
+                error_status = status.HTTP_403_FORBIDDEN
             elif "format" in error:
                 error_status = status.HTTP_400_BAD_REQUEST   
             return Response({"error": error}, status=error_status)
@@ -637,11 +623,17 @@ class PublicFileView(APIView):
         file_handle = file_obj.content.open('rb')
         response = FileResponse(file_handle, content_type=file_obj.mime_type)
         response['Content-Disposition'] = f'inline; filename="{file_obj.filename}"'
+
+        # Add tracking headers via service
+        headers = FileShareService.get_public_tracking_headers(shared_link)
+        for key, value in headers.items():
+            response[key] = value
         
         return response
 
     def head(self, request, token):
-        file_obj, error = FileShareService.get_file_from_token(token)
+        # We pass increment_type=None because HEAD requests (metadata checks) shouldn't count as a full "view"
+        file_obj, shared_link, error = FileShareService.get_file_from_token(token, increment_type=None)
         if error:
             return Response({"error": error}, status=status.HTTP_404_NOT_FOUND)
         
@@ -649,6 +641,12 @@ class PublicFileView(APIView):
         response = HttpResponse(content_type=file_obj.mime_type)
         response['Content-Length'] = file_obj.content.size
         response['Content-Disposition'] = f'inline; filename="{file_obj.filename}"'
+
+        # Add tracking headers via service
+        headers = FileShareService.get_public_tracking_headers(shared_link)
+        for key, value in headers.items():
+            response[key] = value
+        
         return response
 
 class DuplicateFilesView(APIView):
