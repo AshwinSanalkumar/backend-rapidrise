@@ -9,6 +9,7 @@ from django.conf import settings
 from django.core.mail import EmailMessage
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.base import ContentFile
+from django.template.loader import render_to_string
 from .models import SharedLink, UserFile
 
 def send_email_async(email):
@@ -137,24 +138,42 @@ class FileShareService:
         sender_display = sender.get_full_name() or sender.username
         subject = f"Secure file shared with you: {file_name}"
         
-        body = (
-            f"Hello,\n\n"
-            f"{sender_display} has shared a file with you via NexusShare.\n\n"
-            f"File: {file_name}\n"
-            f"Access Link: {url}\n"
-            f"This link will expire in {duration} minutes.\n\n"
-        )
+        total_minutes = int(duration)
+        if total_minutes < 60:
+            duration_display = f"{total_minutes} minute{'s' if total_minutes != 1 else ''}"
+        elif total_minutes < 24 * 60:
+            hours = total_minutes // 60
+            mins = total_minutes % 60
+            duration_display = f"{hours} hour{'s' if hours != 1 else ''}"
+            if mins:
+                duration_display += f" and {mins} minute{'s' if mins != 1 else ''}"
+        else:
+            days = total_minutes // (24 * 60)
+            hours = (total_minutes % (24 * 60)) // 60
+            duration_display = f"{days} day{'s' if days != 1 else ''}"
+            if hours:
+                duration_display += f" and {hours} hour{'s' if hours != 1 else ''}"
         
-        if personal_message:
-            body += f"Message from sender:\n\"{personal_message}\"\n\n"
+        context = {
+            'file_name': file_name,
+            'url': url,
+            'duration_display': duration_display,
+            'personal_message': personal_message,
+            'sender_display': sender_display,
+            'frontend_url': settings.FRONTEND_URL
+        }
+        
+        html_body = render_to_string('emails/file_share.html', context)
 
         email = EmailMessage(
             subject=subject,
-            body=body,
+            body=html_body,
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=recipients if len(recipients) == 1 else [],
             bcc=recipients if len(recipients) > 1 else [],
         )
+        email.content_subtype = "html"  # Render as HTML
+        
         # Offload sending to a background thread to prevent request blocking
         thread = threading.Thread(target=send_email_async, args=(email,))
         thread.start()
