@@ -12,6 +12,7 @@ from django.utils.encoding import (
 )
 from django.core.mail import send_mail
 from django.conf import settings
+from django.template.loader import render_to_string
 
 
 
@@ -36,13 +37,44 @@ class AuthenticationService:
     def register_user(email, password, first_name, last_name, dob):
         if User.objects.filter(email=email).exists():
             raise ValidationError("Email already registered.")
-        return User.objects.create_user(
+        user = User.objects.create_user(
             email=email,
             password=password,
             first_name=first_name,
             last_name=last_name,
             dob=dob
         )
+        AuthenticationService.send_welcome_email(user)
+        return user
+    #welcome email
+    @staticmethod
+    def send_welcome_email(user):
+        import threading
+        from django.core.mail import EmailMessage
+
+        subject = "Welcome to NexusShare!"
+        context = {
+            'first_name': user.first_name,
+            'frontend_url': settings.FRONTEND_URL
+        }
+        
+        html_body = render_to_string('emails/welcome.html', context)
+        
+        email = EmailMessage(
+            subject=subject,
+            body=html_body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        email.content_subtype = "html"
+        
+        def send_async():
+            try:
+                email.send(fail_silently=True)
+            except Exception:
+                pass
+                
+        threading.Thread(target=send_async).start()
     
     @staticmethod
     def get_user_by_identity(user_data):
@@ -107,17 +139,17 @@ class AuthenticationService:
 
         subject = "Reset Your Password"
 
-        message = f"""
-Hi {user.first_name},
-
-Click the link below to reset your password:
-
-{reset_url}
-
-This link will expire in 10 minutes.
-
-If you did not request this, please ignore this email.
-"""
+        duration = 10
+        context = {
+            'first_name': user.first_name,
+            'reset_url': reset_url,
+            'duration_minutes': duration,
+            'frontend_url': settings.FRONTEND_URL
+        }
+        
+        html_body = render_to_string('emails/password_reset.html', context)
+        
+        message = f"Hi {user.first_name},\n\nClick the link below to reset your password:\n{reset_url}\n\nThis link will expire in {duration} minutes.\n\nIf you did not request this, please ignore this email."
 
         send_mail(
             subject,
@@ -125,6 +157,7 @@ If you did not request this, please ignore this email.
             settings.DEFAULT_FROM_EMAIL,
             [user.email],
             fail_silently=False,
+            html_message=html_body,
         )
 
     @staticmethod
