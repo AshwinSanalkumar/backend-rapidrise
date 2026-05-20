@@ -182,9 +182,9 @@ class FileShareService:
 
         # Logic for counters and limits
         if increment_type == 'access':
-            shared_link.access_count += 1
-            shared_link.is_accessed = True
-            shared_link.save()
+            if not shared_link.is_accessed:
+                shared_link.is_accessed = True
+                shared_link.save()
         elif increment_type == 'download':
             if shared_link.download_limit == 0:
                 return None, None, "This link is for preview only. Downloads are disabled."
@@ -202,8 +202,8 @@ class FileShareService:
         return {
             'X-Download-Limit': str(shared_link.download_limit),
             'X-Download-Count': str(shared_link.download_count),
-            'X-Access-Count': str(shared_link.access_count),
-            'Access-Control-Expose-Headers': 'Content-Disposition, X-Download-Limit, X-Download-Count, X-Access-Count'
+            'X-Expires-At': shared_link.expires_at.isoformat() if shared_link.expires_at else '',
+            'Access-Control-Expose-Headers': 'Content-Disposition, X-Download-Limit, X-Download-Count, X-Expires-At'
         }
 
     @staticmethod

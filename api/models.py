@@ -71,7 +71,6 @@ class SharedLink(models.Model):
     is_revoked = models.BooleanField(default=False)
     revoked_at = models.DateTimeField(null=True)
     is_accessed = models.BooleanField(default=False)
-    access_count = models.IntegerField(default=0)
     download_count = models.IntegerField(default=0)
     download_limit = models.IntegerField(default=5, help_text="Max downloads allowed. 0 means preview only.")
     message = models.TextField(null=True, blank=True)

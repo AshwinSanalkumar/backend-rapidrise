@@ -599,27 +599,32 @@ class PublicFileView(APIView):
     View used to access and view the file using a secure link.
     """
     def get(self, request, token):
+        is_metadata = request.query_params.get('metadata') == 'true'
         is_download = request.query_params.get('download') == 'true'
-        is_track = request.query_params.get('track') == 'true'
         
-        increment_type = 'download' if is_download else 'access'
+        increment_type = None if is_metadata else ('download' if is_download else 'access')
         
-        # If it's just a tracking ping, we only need the counter increment
-        if is_track:
-            _, shared_link, error = FileShareService.get_file_from_token(token, increment_type='access')
-            if error:
-                return Response({"error": error}, status=status.HTTP_404_NOT_FOUND)
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
         file_obj, shared_link, error = FileShareService.get_file_from_token(token, increment_type=increment_type)
         if error:
-            error_status = status.HTTP_404_NOT_FOUND
-            if any(msg in error for msg in ["already been used", "limit reached", "disabled"]):
-                error_status = status.HTTP_403_FORBIDDEN
+            # Return semantically correct HTTP codes so frontend can show the right screen
+            if 'expired' in error.lower():
+                return Response({"error": error}, status=status.HTTP_410_GONE)
+            elif 'revoked' in error.lower():
+                return Response({"error": error}, status=status.HTTP_403_FORBIDDEN)
+            elif any(msg in error for msg in ["already been used", "limit reached", "disabled", "preview only"]):
+                return Response({"error": error}, status=status.HTTP_403_FORBIDDEN)
             elif "format" in error:
-                error_status = status.HTTP_400_BAD_REQUEST   
-            return Response({"error": error}, status=error_status)
+                return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": error}, status=status.HTTP_404_NOT_FOUND)
         
+        if is_metadata:
+            headers = FileShareService.get_public_tracking_headers(shared_link)
+            return Response({
+                'name': file_obj.filename,
+                'size': file_obj.content.size,
+                'type': file_obj.mime_type
+            }, headers=headers)
+
         file_handle = file_obj.content.open('rb')
         response = FileResponse(file_handle, content_type=file_obj.mime_type)
         response['Content-Disposition'] = f'inline; filename="{file_obj.filename}"'
@@ -631,23 +636,6 @@ class PublicFileView(APIView):
         
         return response
 
-    def head(self, request, token):
-        # We pass increment_type=None because HEAD requests (metadata checks) shouldn't count as a full "view"
-        file_obj, shared_link, error = FileShareService.get_file_from_token(token, increment_type=None)
-        if error:
-            return Response({"error": error}, status=status.HTTP_404_NOT_FOUND)
-        
-        from django.http import HttpResponse
-        response = HttpResponse(content_type=file_obj.mime_type)
-        response['Content-Length'] = file_obj.content.size
-        response['Content-Disposition'] = f'inline; filename="{file_obj.filename}"'
-
-        # Add tracking headers via service
-        headers = FileShareService.get_public_tracking_headers(shared_link)
-        for key, value in headers.items():
-            response[key] = value
-        
-        return response
 
 class DuplicateFilesView(APIView):
     permission_classes = [IsAuthenticated]
