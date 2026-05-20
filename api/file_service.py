@@ -491,7 +491,8 @@ class FileStorageService:
             created_at__range=(start_date, end_date)
         ).select_related('file').only(
             'token', 'file__display_name', 'file__filename', 'file__file_size_bytes',
-            'receipient_email', 'created_at', 'expires_at', 'is_revoked', 'message', 'file_id'
+            'receipient_email', 'created_at', 'expires_at', 'is_revoked', 'message', 'file_id',
+            'is_accessed', 'download_count', 'download_limit', 'revoked_at'
         ).order_by('-created_at')
 
         total_uploads = UserFile.objects.filter(owner=user, is_deleted=False).exclude(description='[SYSTEM_INTERNAL_SHARE]').count()
@@ -514,10 +515,19 @@ class FileStorageService:
                 "type": "share",
                 "file_id": str(s.file_id),
                 "file_name": s.file.display_name or s.file.filename,
+                "file_size_bytes": s.file.file_size_bytes,
                 "recipient_email": s.receipient_email or "Public Link",
+                "receipient_email": s.receipient_email,
                 "time": timezone.localtime(s.created_at).strftime("%H:%M"),
                 "is_revoked": s.is_revoked,
                 "is_expired": s.is_expired,
+                "is_accessed": s.is_accessed,
+                "download_count": s.download_count,
+                "download_limit": s.download_limit,
+                "message": s.message,
+                "created_at": s.created_at,
+                "expires_at": s.expires_at,
+                "revoked_at": s.revoked_at
             })
 
         for d in history:
