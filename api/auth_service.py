@@ -29,6 +29,9 @@ class AuthenticationService:
         if not user.check_password(current_password):
             raise ValueError("Incorrect current password.")
 
+        if current_password == new_password:
+            raise ValueError("New password cannot be the same as the old password.")
+
         user.set_password(new_password)
         user.save()
         return True
@@ -187,6 +190,9 @@ class AuthenticationService:
             return False, "Password Must contain atleast One special char"
         if not re.search(r"[0-9]", password):
             return False, "Password Must contain atleast One Number"
+
+        if user.check_password(password):
+            return False, "Please choose a password that has not been used previously"
 
         user.set_password(password)
         user.save()
