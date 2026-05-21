@@ -53,6 +53,9 @@ class UserFile(models.Model):
     
     class Meta:
         db_table = "Files"
+        indexes = [
+            models.Index(fields=['is_deleted', 'deleted_at']),
+        ]
 
 class UserFolder(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
