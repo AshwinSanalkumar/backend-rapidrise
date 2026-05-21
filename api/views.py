@@ -52,6 +52,17 @@ class RegisterView(APIView):
         
 class CookieTokenObtainPairView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        if email and password:
+            user = User.objects.filter(email__iexact=email).first()
+            if user and not user.is_active and user.check_password(password):
+                return Response({
+                    "code": "requires_reactivation",
+                    "email": user.email,
+                    "message": "Your account has been disabled. To reactivate, verify your email with an OTP."
+                }, status=status.HTTP_403_FORBIDDEN)
+
         # Let SimpleJWT do the heavy lifting of validation
         response = super().post(request, *args, **kwargs)
 
@@ -60,6 +71,34 @@ class CookieTokenObtainPairView(TokenObtainPairView):
             response = AuthenticationService.token_service(response, request.data)
         return response
     
+class SendReactivationOTPView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        success, message = AuthenticationService.send_reactivation_otp(email)
+        if not success:
+            return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"message": message}, status=status.HTTP_200_OK)
+
+class VerifyReactivationOTPView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email')
+        otp = request.data.get('otp')
+        if not email or not otp:
+            return Response({"error": "Email and OTP are required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        success, message = AuthenticationService.verify_reactivation_otp(email, otp)
+        if not success:
+            return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"message": message}, status=status.HTTP_200_OK)
 class CookieTokenRefreshView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny] 
@@ -198,6 +237,71 @@ class ResetPasswordView(APIView):
             {"message": message},
             status=status.HTTP_200_OK
         )
+
+class DeactivateAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        password = request.data.get('password')
+        if not password:
+            return Response({"error": "Password is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = request.user
+        if not user.check_password(password):
+            return Response({"error": "Incorrect password."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        user.is_active = False
+        user.disabled_at = timezone.now()
+        user.save()
+
+        # Send deactivation success email
+        import threading
+        from django.core.mail import EmailMessage
+        from django.template.loader import render_to_string
+        from django.conf import settings
+        from datetime import timedelta
+
+        deletion_date = (user.disabled_at + timedelta(days=30)).strftime('%B %d, %Y')
+        
+        context = {
+            'first_name': user.first_name,
+            'deletion_date': deletion_date,
+            'frontend_url': settings.FRONTEND_URL
+        }
+
+        try:
+            html_body = render_to_string('emails/deactivate_success.html', context)
+        except Exception:
+            html_body = None
+
+        plain = (
+            f"Hi {user.first_name},\n\n"
+            f"Your account deactivation was successful. Your account is now disabled and will be completely deleted on {deletion_date} (after 30 days).\n\n"
+            f"To regain access to your account and abort the deletion process, please login before this date.\n"
+        )
+
+        email_msg = EmailMessage(
+            subject="NexusShare — Account Deactivated",
+            body=html_body or plain,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        if html_body:
+            email_msg.content_subtype = "html"
+
+        def send_async():
+            try:
+                email_msg.send(fail_silently=True)
+            except Exception:
+                pass
+
+        threading.Thread(target=send_async).start()
+        
+        response = Response({"message": "Account deactivated successfully."}, status=status.HTTP_200_OK)
+        # Clear out cookies to logout
+        response.delete_cookie('access_token')
+        response.delete_cookie('refresh_token')
+        return response
 
 #---------------------------------------------------------------------------------------------
 #FILE MANAGEMENT VIEWS

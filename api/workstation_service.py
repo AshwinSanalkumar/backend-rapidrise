@@ -10,7 +10,7 @@ class WorkstationService:
     @staticmethod
     def get_user_workstations(user):
         """Get all workstations where the user is a member."""
-        return Workstation.objects.filter(members__user=user).distinct().order_by('-created_at')
+        return Workstation.objects.filter(members__user=user, owner__is_active=True).distinct().order_by('-created_at')
 
     @staticmethod
     def create_workstation(user, data):
@@ -162,7 +162,8 @@ class WorkstationService:
         return User.objects.filter(
             models.Q(email__icontains=query) | 
             models.Q(first_name__icontains=query) | 
-            models.Q(last_name__icontains=query)
+            models.Q(last_name__icontains=query),
+            is_active=True
         ).exclude(id=user.id)[:10]
 
     @staticmethod

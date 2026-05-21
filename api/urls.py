@@ -10,7 +10,8 @@ from .views import (
     WorkstationInviteView, WorkstationInviteRespondView, WorkstationExportView,
     WorkstationVersionsView, WorkstationVersionRestoreView, WorkstationVersionDeleteView,
     WorkstationMemberView,
-    ForgotPasswordView, ResetPasswordView, ChangePasswordView,
+    ForgotPasswordView, ResetPasswordView, ChangePasswordView, DeactivateAccountView,
+    SendReactivationOTPView, VerifyReactivationOTPView,
     CreateFileRequestView, SentRequestsView, ReceivedRequestsView, DeclineRequestView, FulfillRequestView, ImportRequestFileView, DeleteRequestView,
     CreateSharedLinkView, RevokeSharedLinkView, ListSharedLinksView, FolderUpdateView, BulkShareView,
     ChunkedUploadInitView, ChunkedUploadChunkView, ChunkedUploadCompleteView, ChunkedUploadStatusView, ChunkedUploadListView
@@ -24,6 +25,9 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='logout'),
     path('user/', UserDetailView.as_view(), name='user-detail'),
     path('user/change-password/', ChangePasswordView.as_view(), name='change-password'),
+    path('user/deactivate/', DeactivateAccountView.as_view(), name='deactivate-account'),
+    path('user/reactivate/send-otp/', SendReactivationOTPView.as_view(), name='send-reactivation-otp'),
+    path('user/reactivate/verify-otp/', VerifyReactivationOTPView.as_view(), name='verify-reactivation-otp'),
     path("forgot-password/", ForgotPasswordView.as_view(), name="forgot-password"),
     path("reset-password/<uidb64>/<token>/", ResetPasswordView.as_view(), name="reset-password"),
 

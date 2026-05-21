@@ -8,7 +8,7 @@ class RequestService:
     @staticmethod
     def create_request(user, email, note=''):
         try:
-            recipient = User.objects.get(email__iexact=email)
+            recipient = User.objects.get(email__iexact=email, disabled_at__isnull=True)
         except User.DoesNotExist:
             raise ValueError("User not found.")
 
