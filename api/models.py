@@ -27,6 +27,9 @@ class User(AbstractUser):
     objects = UserManager()
     storage_limit_bytes = models.BigIntegerField(default=1024*1024*1024) 
     consumed_storage = models.BigIntegerField(default=0)
+    disabled_at = models.DateTimeField(null=True, blank=True)
+    activation_otp = models.CharField(max_length=6, null=True, blank=True)
+    activation_otp_created_at = models.DateTimeField(null=True, blank=True)
 
     USERNAME_FIELD='email'
     REQUIRED_FIELDS = ["first_name", "last_name"]

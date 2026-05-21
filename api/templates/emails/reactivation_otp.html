@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Reactivation OTP</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #334155; -webkit-font-smoothing: antialiased;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; padding: 40px 16px;">
+        <tr>
+            <td align="center">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 24px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.03); max-width: 560px;">
+                    
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding: 32px 40px 0 40px;">
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td>
+                                        <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;">NexusShare</h1>
+                                        <p style="margin: 4px 0 0 0; font-size: 10px; font-weight: 700; color: #4f46e5; text-transform: uppercase; letter-spacing: 0.15em;">Account Reactivation</p>
+                                    </td>
+                                </tr>
+                            </table>
+                            <div style="height: 1px; background-color: #f1f5f9; margin-top: 24px; background: #f1f5f9;"></div>
+                        </td>
+                    </tr>
+
+                    <!-- Body Context Container -->
+                    <tr>
+                        <td style="padding: 24px 40px 32px 40px;">
+                            <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #475569;">
+                                Hello <strong style="color: #0f172a; font-weight: 700;">{{ first_name }}</strong>,
+                            </p>
+                            <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #475569;">
+                                A request was made to reactivate your disabled NexusShare account. Please use the following One-Time Password (OTP) to proceed:
+                            </p>
+                            
+                            <!-- OTP Display -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                                <tr>
+                                    <td align="center">
+                                        <div style="background-color: #f3f4f6; color: #0f172a; padding: 20px 32px; border-radius: 12px; font-weight: 800; font-size: 32px; letter-spacing: 8px; border: 1px dashed #cbd5e1; display: inline-block;">
+                                            {{ otp }}
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin: 0 0 0 0; font-size: 13px; line-height: 1.6; color: #64748b;">
+                                <strong style="color: #ef4444;">This code expires in 10 minutes.</strong><br/>
+                                If you did not request this, please ignore this email. Your account will remain disabled.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #fafafa; padding: 24px 40px; text-align: center; border-top: 1px solid #f1f5f9;">
+                            <p style="margin: 0; font-size: 11px; color: #94a3b8; line-height: 1.5; font-weight: 500;">
+                                Powered by <strong style="color: #64748b; font-weight: 700;">NexusShare</strong> &mdash; Secured Access Management Node.<br>
+                                <a href="{{ frontend_url }}" style="color: #4f46e5; text-decoration: none; font-weight: 600; margin-top: 4px; display: inline-block;">nexusshare.com</a>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
