@@ -31,6 +31,20 @@ class FileShareService:
         
         if not file_ids:
             return None, "No files provided"
+            
+        # Check for duplicate IDs
+        if len(file_ids) != len(set(file_ids)):
+            return None, "Duplicate file IDs are not allowed."
+
+        # Fetch all files belonging to the user
+        files = UserFile.objects.filter(
+            id__in=file_ids,
+            owner=user
+        )
+
+        # Validate that all files were found and belong to the user
+        if files.count() != len(file_ids):
+            return None, "Some files were not found or do not belong to you."
 
         buffer = BytesIO()
         with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:

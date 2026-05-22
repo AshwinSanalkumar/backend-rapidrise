@@ -731,7 +731,7 @@ class PublicFileView(APIView):
 
         file_handle = file_obj.content.open('rb')
         response = FileResponse(file_handle, content_type=file_obj.mime_type)
-        response['Content-Disposition'] = f'inline; filename="{file_obj.filename}"'
+        response['Content-Disposition'] = f'attachment; filename="{file_obj.filename}"'
 
         # Add tracking headers via service
         headers = FileShareService.get_public_tracking_headers(shared_link)
