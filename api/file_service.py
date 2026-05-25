@@ -86,11 +86,25 @@ class FileStorageService:
             max_mb = settings.MAX_UPLOAD_SIZE / (1024 * 1024)
             raise ValidationError(f"File exceeds {max_mb:.2f} MB limit.")
 
-        # MIME validation (basic - header based)
-        import mimetypes
-        mime_type = getattr(file_obj, 'content_type', None)
-        if not mime_type:
-            mime_type = mimetypes.guess_type(file_obj.name)[0] or 'application/octet-stream'
+        # MIME validation (Accurate content-based detection using python-magic)
+        import magic
+        
+        # Read the first 2048 bytes for magic number detection
+        file_obj.seek(0)
+        file_content = file_obj.read(2048)
+        file_obj.seek(0) # Reset pointer
+        
+        mime_type = magic.from_buffer(file_content, mime=True)
+        
+        # If magic is too generic or fails, fall back to extension-based guessing
+        if not mime_type or mime_type == 'application/octet-stream':
+            import mimetypes
+            guessed_type = mimetypes.guess_type(file_obj.name)[0]
+            if guessed_type:
+                mime_type = guessed_type
+            elif not mime_type:
+                # If both fail, use a safe default
+                mime_type = 'application/octet-stream'
 
         if mime_type not in FileStorageService.ALLOWED_TYPES:
             raise ValidationError(f"File type '{mime_type}' is not supported.")
@@ -138,6 +152,7 @@ class FileStorageService:
                 raise ValidationError("Storage limit exceeded. Please clean up your vault.")
 
             mime_type = FileStorageService.validate_file(file_obj, check_size=consume_quota)
+            print(mime_type)
 
             # Important: compute_checksum reads the stream
             checksum = FileStorageService.compute_checksum(file_obj)
@@ -222,10 +237,8 @@ class FileStorageService:
 
         with open(chunked_upload.file_path, 'rb') as f:
             from django.core.files import File
-            import mimetypes
             django_file = File(f, name=chunked_upload.filename)
-            # Add content_type attribute for process_and_store_file/validate_file
-            django_file.content_type = mimetypes.guess_type(chunked_upload.filename)[0] or 'application/octet-stream'
+            # content_type will be accurately detected by magic in validate_file
             
             user_file = FileStorageService.process_and_store_file(
                 user=chunked_upload.user,
