@@ -4,7 +4,6 @@ from io import BytesIO
 from uuid import UUID
 from datetime import timedelta
 from django.utils import timezone
-from django.urls import reverse
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.core.exceptions import ObjectDoesNotExist
@@ -32,17 +31,14 @@ class FileShareService:
         if not file_ids:
             return None, "No files provided"
             
-        # Check for duplicate IDs
         if len(file_ids) != len(set(file_ids)):
             return None, "Duplicate file IDs are not allowed."
 
-        # Fetch all files belonging to the user
         files = UserFile.objects.filter(
             id__in=file_ids,
             owner=user
         )
 
-        # Validate that all files were found and belong to the user
         if files.count() != len(file_ids):
             return None, "Some files were not found or do not belong to you."
 
@@ -51,7 +47,6 @@ class FileShareService:
             for fid in file_ids:
                 try:
                     f = UserFile.objects.get(id=fid, owner=user)
-                    # Read content into memory for zipping
                     zf.writestr(f.filename, f.content.read())
                 except Exception:
                     continue
@@ -61,7 +56,6 @@ class FileShareService:
         zip_obj = ContentFile(buffer.read(), name=zip_name)
         zip_obj.content_type = 'application/zip'
         
-        # Store the ghost file for sharing
         new_file = FileStorageService.process_and_store_file(
             user=user,
             file_obj=zip_obj,
@@ -70,7 +64,6 @@ class FileShareService:
             consume_quota=False
         )
         
-        # Use existing single share method
         return FileShareService.share_file_via_email(
             file_id=str(new_file.id),
             user=user,
@@ -106,7 +99,6 @@ class FileShareService:
         created_links_info = []
 
         if not emails:
-            # Fallback to single link without recipient if no emails provided
             shared_link = SharedLink.objects.create(
                 file=file_obj, 
                 expires_at=expiry,
@@ -186,9 +178,7 @@ class FileShareService:
             to=recipients if len(recipients) == 1 else [],
             bcc=recipients if len(recipients) > 1 else [],
         )
-        email.content_subtype = "html"  # Render as HTML
-        
-        # Offload sending to a background thread to prevent request blocking
+        email.content_subtype = "html"  
         thread = threading.Thread(target=send_email_async, args=(email,))
         thread.start()
 
@@ -213,7 +203,6 @@ class FileShareService:
         if timezone.now() > shared_link.expires_at:
             return None, None, "This link has expired."
 
-        # Logic for counters and limits
         if increment_type == 'access':
             if not shared_link.is_accessed:
                 shared_link.is_accessed = True
