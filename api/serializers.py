@@ -52,10 +52,44 @@ class RegistrationSerializer(serializers.Serializer):
             raise serializers.ValidationError("Password Must contain atleast One Number")
         return value
     
+    def normalize_email(self, email):
+        email = email.lower().strip()
+
+        local, domain = email.split("@")
+        gmail_domains = ["gmail.com", "googlemail.com"]
+
+        if domain in gmail_domains:
+            local = local.split("+")[0]
+            local = local.replace(".", "")
+
+        return f"{local}@{domain}"
+
     def validate_email(self, value):
-        if User.objects.filter(email=value.lower()).exists():
-            raise serializers.ValidationError('A user with this email already exists.')
-        return value
+        value = value.lower().strip()
+        regex = r'^[a-zA-Z0-9._+-]+@[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$'
+        if not re.match(regex, value):
+            raise serializers.ValidationError(
+                "Enter a valid email address."
+            )
+        blocked_symbols = ["#", "$", "%", "!", "&"]
+
+        if any(symbol in value for symbol in blocked_symbols):
+            raise serializers.ValidationError(
+                "Email contains invalid characters."
+            )
+
+        normalized_email = self.normalize_email(value)
+        existing_emails = User.objects.values_list('email', flat=True)
+
+        for email in existing_emails:
+            stored_normalized = self.normalize_email(email)
+
+            if stored_normalized == normalized_email:
+                raise serializers.ValidationError(
+                    "Account already exists."
+                )
+
+        return normalized_email
 
     def validate_dob(self, value):
         from datetime import date
