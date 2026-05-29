@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'api',
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders'
 ]
 
@@ -58,11 +59,13 @@ ASGI_APPLICATION = 'config.asgi.application'
 #     },
 # }
 
+REDIS_HOST = os.getenv("REDIS_HOST")
+REDIS_PORT = int(os.getenv("REDIS_PORT"))
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
+            "hosts": [(REDIS_HOST, REDIS_PORT)],
         },
     },
 }
@@ -141,14 +144,18 @@ REST_FRAMEWORK = {
 
 from datetime import timedelta
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(
+        minutes=int(os.getenv("JWT_ACCESS_TOKEN_MINUTES", 5))
+    ),
+    'REFRESH_TOKEN_LIFETIME': timedelta(
+        days=int(os.getenv("JWT_REFRESH_TOKEN_DAYS", 7))
+    ),
     'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': False, # Set to True if you install the blacklist app
+    'BLACKLIST_AFTER_ROTATION': True,
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),
-}
+}   
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
@@ -167,19 +174,26 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 X_FRAME_OPTIONS = 'ALLOWALL'
-CSP_FRAME_ANCESTORS = ("'self'", "http://localhost:3000")
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',  # your React dev URL
+    FRONTEND_URL,
 ]
 CORS_ALLOW_CREDENTIALS = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-MAX_UPLOAD_SIZE = 100 * 1024 * 1024
+
+MAX_UPLOAD_SIZE = (
+    int(os.getenv("MAX_UPLOAD_SIZE_MB", 100))
+    * 1024
+    * 1024
+)
 
 ALLOWED_TYPES={
         'image/jpeg',
@@ -198,20 +212,24 @@ ALLOWED_TYPES={
         "application/octet-stream"
     }
 
-# The backend to use for sending emails
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.smtp.EmailBackend"
+)
 
 # SMTP Server configuration
-EMAIL_HOST = 'smtp.gmail.com'  # Or your provider (e.g., smtp.sendgrid.net)
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
+EMAIL_HOST = os.getenv("EMAIL_HOST")
+EMAIL_PORT = os.getenv("EMAIL_PORT")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS")
 
 # Credentials - USE ENVIRONMENT VARIABLES
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 
 # The default 'From' address for system-generated emails
-DEFAULT_FROM_EMAIL = 'NexusShare <no-reply@yourdomain.com>'
-FRONTEND_URL = "http://localhost:5173"
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
 
-PASSWORD_RESET_TIMEOUT = 600
+
+PASSWORD_RESET_TIMEOUT = int(
+    os.getenv("PASSWORD_RESET_TIMEOUT", 600)
+)

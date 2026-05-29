@@ -48,12 +48,11 @@ class FileStorageService:
             queryset = queryset.filter(is_favorite=True)
             
         if search_term:
+            from django.db.models import Q
             queryset = queryset.filter(
-                display_name__icontains=search_term
-            ) | queryset.filter(
-                filename__icontains=search_term
-            ) | queryset.filter(
-                description__icontains=search_term
+                Q(display_name__icontains=search_term) |
+                Q(filename__icontains=search_term) |
+                Q(description__icontains=search_term)
             )
             
         return queryset.order_by('-uploaded_at')
@@ -88,7 +87,7 @@ class FileStorageService:
 
         # MIME validation (Accurate content-based detection using python-magic)
         import magic
-        
+            
         # Read the first 2048 bytes for magic number detection
         file_obj.seek(0)
         file_content = file_obj.read(2048)

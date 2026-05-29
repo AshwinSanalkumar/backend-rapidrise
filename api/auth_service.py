@@ -165,6 +165,43 @@ class AuthenticationService:
         )
 
     @staticmethod
+    def send_password_reset_success_email(user):
+        import threading
+        from django.core.mail import EmailMessage
+        from django.utils import timezone
+
+        subject = "Your NexusShare password has been reset"
+        context = {
+            'first_name': user.first_name,
+            'timestamp': timezone.localtime(timezone.now()).strftime('%B %d, %Y at %I:%M %p'),
+            'frontend_url': settings.FRONTEND_URL
+        }
+        
+        try:
+            html_body = render_to_string('emails/password_reset_success.html', context)
+        except Exception:
+            html_body = None
+            
+        plain = f"Hi {user.first_name},\n\nYour NexusShare password was successfully reset on {context['timestamp']}.\n\nIf you did not request this, please contact support immediately."
+
+        email = EmailMessage(
+            subject=subject,
+            body=html_body or plain,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        if html_body:
+            email.content_subtype = "html"
+        
+        def send_async():
+            try:
+                email.send(fail_silently=True)
+            except Exception:
+                pass
+                
+        threading.Thread(target=send_async).start()
+
+    @staticmethod
     def reset_password(uidb64, token, password):
 
         try:
@@ -197,6 +234,7 @@ class AuthenticationService:
 
         user.set_password(password)
         user.save()
+        AuthenticationService.send_password_reset_success_email(user)
 
         return True, "Password reset successful"
 

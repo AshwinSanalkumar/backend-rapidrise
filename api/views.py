@@ -23,6 +23,7 @@ from django.views.decorators.clickjacking import xframe_options_exempt
 from django.utils import timezone
 from django.http import FileResponse
 from rest_framework.pagination import PageNumberPagination
+from django.conf import settings
 
 
 class StandardPagination(PageNumberPagination):
@@ -99,53 +100,85 @@ class VerifyReactivationOTPView(APIView):
         if not success:
             return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"message": message}, status=status.HTTP_200_OK)
+        
 class CookieTokenRefreshView(APIView):
     authentication_classes = []
-    permission_classes = [AllowAny] 
-    
+    permission_classes = [AllowAny]
+
     def post(self, request):
         refresh_token = request.COOKIES.get('refresh_token')
-        if not refresh_token:
-            return Response({'error': 'No refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        try:
-            from django.conf import settings
-            token = RefreshToken(refresh_token)
-            
-            response = Response({'message': 'Token refreshed'})
-            
-            # Set Access Token Cookie
-            response.set_cookie(
-                key='access_token',
-                value=str(token.access_token),
-                httponly=True,
-                secure=False,
-                samesite='Lax',
-                max_age=int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),
+        if not refresh_token:
+            return Response(
+                {'error': 'No refresh token'},
+                status=status.HTTP_401_UNAUTHORIZED
             )
 
-            # Handle Token Rotation
-            if settings.SIMPLE_JWT.get('ROTATE_REFRESH_TOKENS', False):
-                # We MUST manually trigger the rotation by updating the JTI and Expiry
-                token.set_jti()
-                token.set_exp()
-                
-                new_refresh = str(token)
-                response.set_cookie(
-                    key='refresh_token',
-                    value=new_refresh,
-                    httponly=True,
-                    secure=False,
-                    samesite='Lax',
-                    max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()),
-                )
+        try:
+            old_refresh = RefreshToken(refresh_token)
+
+            # Get user from token
+            user_id = old_refresh.payload.get('user_id')
+
+            from .models import User  # adjust import
+            user = User.objects.get(id=user_id)
+
+            # Blacklist old refresh token
+            if settings.SIMPLE_JWT.get('BLACKLIST_AFTER_ROTATION', False):
+                try:
+                    old_refresh.blacklist()
+                except AttributeError:
+                    pass
+
+            # Create fresh tokens
+            new_refresh = RefreshToken.for_user(user)
+            new_access = new_refresh.access_token
+
+            response = Response({
+                'message': 'Token refreshed'
+            })
+
+            response.set_cookie(
+                key='access_token',
+                value=str(new_access),
+                httponly=True,
+                secure=not settings.DEBUG,
+                samesite='Lax',
+                max_age=int(
+                    settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()
+                ),
+            )
+
+            response.set_cookie(
+                key='refresh_token',
+                value=str(new_refresh),
+                httponly=True,
+                secure=not settings.DEBUG,
+                samesite='Lax',
+                max_age=int(
+                    settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()
+                ),
+            )
 
             return response
-        except Exception as e:
-            return Response({'error': 'Invalid refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        except Exception:
+            return Response(
+                {'error': 'Invalid refresh token'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
     
 class LogoutView(APIView):
     def post(self, request):
+        refresh_token = request.COOKIES.get('refresh_token')
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            except Exception:
+                # Token might already be blacklisted or invalid
+                pass
+                
         response = Response({'message': 'Logged out'})
         response.delete_cookie('access_token')
         response.delete_cookie('refresh_token')
