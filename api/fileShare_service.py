@@ -10,6 +10,10 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.base import ContentFile
 from django.template.loader import render_to_string
 from .models import SharedLink, UserFile
+import resend
+import traceback
+from django.conf import settings
+from django.template.loader import render_to_string
 
 def send_email_async(email):
     try:
@@ -169,24 +173,24 @@ class FileShareService:
         
         html_body = render_to_string('emails/file_share.html', context)
 
-        email = EmailMessage(
-            subject=subject,
-            body=html_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=recipients if len(recipients) == 1 else [],
-            bcc=recipients if len(recipients) > 1 else [],
-        )
-        email.content_subtype = "html"  
-        import traceback
+        resend.api_key = settings.RESEND_API_KEY
 
         try:
-            result = email.send(fail_silently=False)
+            params = {
+                "from": "NexusShare <onboarding@resend.dev>",
+                "to": recipients,
+                "subject": subject,
+                "html": html_body,
+            }
+
+            result = resend.Emails.send(params)
+
             print("EMAIL SENT:", result)
+
         except Exception as e:
             print("EMAIL ERROR:", str(e))
             print(traceback.format_exc())
             raise
-        print("EMAIL SENT SUCCESSFULLY")    
 
     @staticmethod
     def get_file_from_token(token_str, increment_type=None):

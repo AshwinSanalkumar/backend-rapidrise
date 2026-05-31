@@ -9,7 +9,7 @@ from .views import (
     WorkstationListView, WorkstationDetailView, UserSearchView, 
     WorkstationInviteView, WorkstationInviteRespondView, WorkstationExportView,
     WorkstationVersionsView, WorkstationVersionRestoreView, WorkstationVersionDeleteView,
-    WorkstationMemberView,SMTPTestView,DNSCheckView,
+    WorkstationMemberView,
     ForgotPasswordView, ResetPasswordView, ChangePasswordView, DeactivateAccountView,
     SendReactivationOTPView, VerifyReactivationOTPView,
     CreateFileRequestView, SentRequestsView, ReceivedRequestsView, DeclineRequestView, FulfillRequestView, ImportRequestFileView, DeleteRequestView,
@@ -99,6 +99,5 @@ urlpatterns = [
     path('workstations/<uuid:workstation_id>/versions/<uuid:version_id>/restore/', WorkstationVersionRestoreView.as_view(), name='workstation-version-restore'),
     path('workstations/<uuid:workstation_id>/versions/<uuid:version_id>/delete/', WorkstationVersionDeleteView.as_view(), name='workstation-version-delete'),
     path('workstations/<uuid:workstation_id>/members/<int:member_id>/', WorkstationMemberView.as_view(), name='workstation-member'),
-    path('smtp-test/', SMTPTestView.as_view()),
-    path("dns-test/", DNSCheckView.as_view()),
+
 ]

@@ -25,66 +25,6 @@ from django.http import FileResponse
 from rest_framework.pagination import PageNumberPagination
 from django.conf import settings
 
-
-
-
-from django.core.mail import send_mail
-from rest_framework.response import Response
-from rest_framework.views import APIView
-
-import smtplib
-from rest_framework.views import APIView
-from rest_framework.response import Response
-
-import smtplib
-from rest_framework.views import APIView
-from rest_framework.response import Response
-
-class SMTPTestView(APIView):
-    permission_classes = []
-
-    def get(self, request):
-        try:
-            server = smtplib.SMTP_SSL(
-                "smtp.gmail.com",
-                465,
-                timeout=10
-            )
-
-            server.quit()
-
-            return Response({
-                "status": "success"
-            })
-
-        except Exception as e:
-            return Response({
-                "status": "failed",
-                "error": str(e)
-            }, status=500)
-        
-import socket
-from rest_framework.views import APIView
-from rest_framework.response import Response
-
-class DNSCheckView(APIView):
-    permission_classes = []
-
-    def get(self, request):
-        try:
-            ip = socket.gethostbyname("smtp.gmail.com")
-
-            return Response({
-                "status": "success",
-                "ip": ip
-            })
-
-        except Exception as e:
-            return Response({
-                "status": "failed",
-                "error": str(e)
-            })
-        
 class StandardPagination(PageNumberPagination):
     page_size = 8
     page_size_query_param = 'page_size'
