@@ -63,6 +63,28 @@ class SMTPTestView(APIView):
                 "error": str(e)
             }, status=500)
         
+import socket
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+class DNSCheckView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        try:
+            ip = socket.gethostbyname("smtp.gmail.com")
+
+            return Response({
+                "status": "success",
+                "ip": ip
+            })
+
+        except Exception as e:
+            return Response({
+                "status": "failed",
+                "error": str(e)
+            })
+        
 class StandardPagination(PageNumberPagination):
     page_size = 8
     page_size_query_param = 'page_size'
