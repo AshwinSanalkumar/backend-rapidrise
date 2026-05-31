@@ -13,9 +13,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-import pymysql
+# import pymysql
 
-pymysql.install_as_MySQLdb()
+# pymysql.install_as_MySQLdb()
 load_dotenv() 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -26,12 +26,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = os.environ.get("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DEBUG", "False") == "True"
+DEBUG = os.environ.get("DEBUG") == "True"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [    
+    "your-app-name.onrender.com",
+
+    "localhost",
+
+    "127.0.0.1",]
 
 
 # Application definition
@@ -62,13 +67,11 @@ ASGI_APPLICATION = 'config.asgi.application'
 #     },
 # }
 
-REDIS_HOST = os.getenv("REDIS_HOST")
-REDIS_PORT = int(os.getenv("REDIS_PORT"))
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [(REDIS_HOST, REDIS_PORT)],
+            "hosts": [os.environ.get("REDIS_URL")],
         },
     },
 }
@@ -76,6 +79,7 @@ CHANNEL_LAYERS = {
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -115,15 +119,24 @@ WSGI_APPLICATION = 'config.wsgi.application'
 #     }
 # }
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': os.environ.get('DB_NAME'),
+#         'USER': os.environ.get('DB_USER'),
+#         'PASSWORD': os.environ.get('DB_PASSWORD'),
+#         'HOST': os.environ.get('DB_HOST', 'localhost'),
+#         'PORT': os.environ.get('DB_PORT', '3306'),
+#     }
+# }
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '3306'),
-    }
+
+    "default": dj_database_url.parse(
+
+        os.environ.get("DATABASE_URL")
+
+    )
+
 }
 
 
@@ -160,10 +173,10 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(
-        minutes=int(os.getenv("JWT_ACCESS_TOKEN_MINUTES", 5))
+        minutes=int(os.environ.get("JWT_ACCESS_TOKEN_MINUTES", 5))
     ),
     'REFRESH_TOKEN_LIFETIME': timedelta(
-        days=int(os.getenv("JWT_REFRESH_TOKEN_DAYS", 7))
+        days=int(os.environ.get("JWT_REFRESH_TOKEN_DAYS", 7))
     ),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -187,13 +200,21 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = "static/"
+
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+STATICFILES_STORAGE = (
+
+    "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+)
 X_FRAME_OPTIONS = 'ALLOWALL'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
-FRONTEND_URL = os.getenv("FRONTEND_URL")
+FRONTEND_URL = os.environ.get("FRONTEND_URL")
 
 CORS_ALLOWED_ORIGINS = [
     FRONTEND_URL,
@@ -205,7 +226,7 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 MAX_UPLOAD_SIZE = (
-    int(os.getenv("MAX_UPLOAD_SIZE_MB", 100))
+    int(os.environ.get("MAX_UPLOAD_SIZE_MB", 100))
     * 1024
     * 1024
 )
@@ -227,24 +248,24 @@ ALLOWED_TYPES={
         "application/octet-stream"
     }
 
-EMAIL_BACKEND = os.getenv(
+EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND",
     "django.core.mail.backends.smtp.EmailBackend"
 )
 
 # SMTP Server configuration
-EMAIL_HOST = os.getenv("EMAIL_HOST")
-EMAIL_PORT = os.getenv("EMAIL_PORT")
-EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS")
+EMAIL_HOST = os.environ.get("EMAIL_HOST")
+EMAIL_PORT = os.environ.get("EMAIL_PORT")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS")
 
 # Credentials - USE ENVIRONMENT VARIABLES
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 
 # The default 'From' address for system-generated emails
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL")
 
 
 PASSWORD_RESET_TIMEOUT = int(
-    os.getenv("PASSWORD_RESET_TIMEOUT", 600)
+    os.environ.get("PASSWORD_RESET_TIMEOUT", 600)
 )
