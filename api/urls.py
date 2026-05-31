@@ -99,5 +99,5 @@ urlpatterns = [
     path('workstations/<uuid:workstation_id>/versions/<uuid:version_id>/restore/', WorkstationVersionRestoreView.as_view(), name='workstation-version-restore'),
     path('workstations/<uuid:workstation_id>/versions/<uuid:version_id>/delete/', WorkstationVersionDeleteView.as_view(), name='workstation-version-delete'),
     path('workstations/<uuid:workstation_id>/members/<int:member_id>/', WorkstationMemberView.as_view(), name='workstation-member'),
-    path('smtp-test/', SMTPTestView.as_view()),,
+    path('smtp-test/', SMTPTestView.as_view()),
 ]
