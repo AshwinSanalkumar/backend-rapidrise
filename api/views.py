@@ -32,18 +32,30 @@ from django.core.mail import send_mail
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-class EmailTestView(APIView):
+import smtplib
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+class SMTPTestView(APIView):
     permission_classes = []
 
     def get(self, request):
-        send_mail(
-            "Test Email",
-            "Hello from Render",
-            settings.EMAIL_HOST_USER,
-            ["ashwindev25@gmail.com"],
-            fail_silently=False,
-        )
-        return Response({"message": "Email sent"})
+        try:
+            server = smtplib.SMTP("smtp.gmail.com", 587, timeout=10)
+            server.ehlo()
+            server.starttls()
+            server.quit()
+
+            return Response({
+                "status": "success"
+            })
+
+        except Exception as e:
+            return Response({
+                "status": "failed",
+                "error": str(e)
+            }, status=500)
+        
 class StandardPagination(PageNumberPagination):
     page_size = 8
     page_size_query_param = 'page_size'
