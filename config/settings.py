@@ -33,7 +33,7 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 DEBUG = os.environ.get("DEBUG") == "True"
 
 ALLOWED_HOSTS = [    
-    "your-app-name.onrender.com",
+    "backend-rapidrise.onrender.com",
 
     "localhost",
 
@@ -220,7 +220,12 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL")
 CORS_ALLOWED_ORIGINS = [
     FRONTEND_URL,
 ]
+CSRF_TRUSTED_ORIGINS = [
+    FRONTEND_URL,
+]
 CORS_ALLOW_CREDENTIALS = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = '/media/'
