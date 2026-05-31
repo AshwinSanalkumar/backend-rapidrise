@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 # import pymysql
 
 # pymysql.install_as_MySQLdb()
+import dj_database_url
 load_dotenv() 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -255,8 +256,8 @@ EMAIL_BACKEND = os.environ.get(
 
 # SMTP Server configuration
 EMAIL_HOST = os.environ.get("EMAIL_HOST")
-EMAIL_PORT = os.environ.get("EMAIL_PORT")
-EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") == "True"
 
 # Credentials - USE ENVIRONMENT VARIABLES
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
