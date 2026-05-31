@@ -40,7 +40,7 @@ class EmailTestView(APIView):
             "Test Email",
             "Hello from Render",
             settings.EMAIL_HOST_USER,
-            ["your_email@gmail.com"],
+            ["ashwindev25@gmail.com"],
             fail_silently=False,
         )
         return Response({"message": "Email sent"})
