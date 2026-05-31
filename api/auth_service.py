@@ -14,7 +14,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils import timezone
-
+import resend
 
 
 token_generator = PasswordResetTokenGenerator()
@@ -155,14 +155,20 @@ class AuthenticationService:
         
         message = f"Hi {user.first_name},\n\nClick the link below to reset your password:\n{reset_url}\n\nThis link will expire in {duration} minutes.\n\nIf you did not request this, please ignore this email."
 
-        send_mail(
-            subject,
-            message,
-            settings.DEFAULT_FROM_EMAIL,
-            [user.email],
-            fail_silently=False,
-            html_message=html_body,
-        )
+        resend.api_key = settings.RESEND_API_KEY
+
+        try:
+            result = resend.Emails.send({
+                "from": "NexusShare <onboarding@resend.dev>",
+                "to": [user.email],
+                "subject": subject,
+                "text": message,
+                "html": html_body,
+            })
+            print("PASSWORD RESET EMAIL SENT:", result)
+        except Exception as e:
+            print("PASSWORD RESET EMAIL ERROR:", str(e))
+            raise
 
     @staticmethod
     def send_password_reset_success_email(user):
