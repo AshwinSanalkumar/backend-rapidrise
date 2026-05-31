@@ -177,7 +177,15 @@ class FileShareService:
             bcc=recipients if len(recipients) > 1 else [],
         )
         email.content_subtype = "html"  
-        email.send(fail_silently=False)
+        import traceback
+
+        try:
+            result = email.send(fail_silently=False)
+            print("EMAIL SENT:", result)
+        except Exception as e:
+            print("EMAIL ERROR:", str(e))
+            print(traceback.format_exc())
+            raise
         print("EMAIL SENT SUCCESSFULLY")    
 
     @staticmethod

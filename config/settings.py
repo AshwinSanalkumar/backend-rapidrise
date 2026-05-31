@@ -290,6 +290,12 @@ EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") == "True"
 # Credentials - USE ENVIRONMENT VARIABLES
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+print("========== EMAIL DEBUG ==========")
+print("EMAIL_HOST:", EMAIL_HOST)
+print("EMAIL_PORT:", EMAIL_PORT)
+print("EMAIL_HOST_USER:", EMAIL_HOST_USER)
+print("EMAIL_USE_TLS:", EMAIL_USE_TLS)
+print("=================================")
 
 # The default 'From' address for system-generated emails
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL")
@@ -298,3 +304,4 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL")
 PASSWORD_RESET_TIMEOUT = int(
     os.environ.get("PASSWORD_RESET_TIMEOUT", 600)
 )
+
