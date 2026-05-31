@@ -26,6 +26,24 @@ from rest_framework.pagination import PageNumberPagination
 from django.conf import settings
 
 
+
+
+from django.core.mail import send_mail
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+class EmailTestView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        send_mail(
+            "Test Email",
+            "Hello from Render",
+            settings.EMAIL_HOST_USER,
+            ["your_email@gmail.com"],
+            fail_silently=False,
+        )
+        return Response({"message": "Email sent"})
 class StandardPagination(PageNumberPagination):
     page_size = 8
     page_size_query_param = 'page_size'
