@@ -36,14 +36,21 @@ import smtplib
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
+import smtplib
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
 class SMTPTestView(APIView):
     permission_classes = []
 
     def get(self, request):
         try:
-            server = smtplib.SMTP("smtp.gmail.com", 587, timeout=10)
-            server.ehlo()
-            server.starttls()
+            server = smtplib.SMTP_SSL(
+                "smtp.gmail.com",
+                465,
+                timeout=10
+            )
+
             server.quit()
 
             return Response({
