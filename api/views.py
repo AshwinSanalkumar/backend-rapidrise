@@ -142,8 +142,8 @@ class CookieTokenRefreshView(APIView):
                 key='access_token',
                 value=str(new_access),
                 httponly=True,
-                secure=not settings.DEBUG,
-                samesite='Lax',
+                secure=True,
+                samesite='None',
                 max_age=int(
                     settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()
                 ),
@@ -153,8 +153,8 @@ class CookieTokenRefreshView(APIView):
                 key='refresh_token',
                 value=str(new_refresh),
                 httponly=True,
-                secure=not settings.DEBUG,
-                samesite='Lax',
+                secure=True,
+                samesite='None',
                 max_age=int(
                     settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()
                 ),
