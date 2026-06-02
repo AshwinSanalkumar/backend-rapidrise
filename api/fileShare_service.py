@@ -13,14 +13,19 @@ from django.db.models import Q
 from .models import SharedLink, UserFile
 from .file_service import FileStorageService
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 def send_email_async(email):
     """
     Helper function to send email in a background thread.
     """
     try:
-        email.send(fail_silently=True)
-    except:
-        pass
+        email.send(fail_silently=False)
+        logger.info("Email sent successfully")
+    except Exception as e:
+        logger.exception(f"Failed to send email: {str(e)}")
 
 class FileShareService:
     @staticmethod
@@ -182,9 +187,8 @@ class FileShareService:
             to=recipients if len(recipients) == 1 else [],
             bcc=recipients if len(recipients) > 1 else [],
         )
-        email.content_subtype = "html"  
-        thread = threading.Thread(target=send_email_async, args=(email,))
-        thread.start()
+        email.content_subtype = "html"
+        email.send(fail_silently=False)
 
     @staticmethod
     def get_file_from_token(token_str, increment_type=None):
