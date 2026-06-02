@@ -111,8 +111,8 @@ class AuthenticationService:
                 key='access_token',
                 value=access_token,
                 httponly=True,
-                secure=False, 
-                samesite='Lax',
+                secure=True, 
+                samesite='None',
                 max_age=int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),   
             )
 
@@ -121,8 +121,8 @@ class AuthenticationService:
                 key='refresh_token',
                 value=refresh_token,
                 httponly=True,
-                secure=False,
-                samesite='Lax',
+                secure=True,
+                samesite='None',
                 max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()), 
             )
 
