@@ -212,8 +212,17 @@ class LogoutView(APIView):
                 pass
                 
         response = Response({'message': 'Logged out'})
-        response.delete_cookie('access_token')
-        response.delete_cookie('refresh_token')
+        response.delete_cookie(
+            key="access_token",
+            path="/",
+            samesite="None",
+        )
+
+        response.delete_cookie(
+            key="refresh_token",
+            path="/",
+            samesite="None",
+        )
         
         user_email = "Unknown"
         if request.user and request.user.is_authenticated:
@@ -805,23 +814,12 @@ class PublicFileView(APIView):
             return Response({
                 'name': file_obj.filename,
                 'size': file_obj.content.size,
-                'type': file_obj.mime_type
+                'type': file_obj.mime_type,
+                'preview': file_obj.content.url if hasattr(file_obj.content, 'url') else None
             }, headers=headers)
 
-        file_handle = file_obj.content.open('rb')
-        response = FileResponse(file_handle, content_type=file_obj.mime_type)
-        
-        if is_download:
-            response['Content-Disposition'] = f'attachment; filename="{file_obj.filename}"'
-        else:
-            response['Content-Disposition'] = f'inline; filename="{file_obj.filename}"'
-
-        # Add tracking headers via service
-        headers = FileShareService.get_public_tracking_headers(shared_link)
-        for key, value in headers.items():
-            response[key] = value
-        
-        return response
+        from django.shortcuts import redirect
+        return redirect(file_obj.content.url)
 
 
 class DuplicateFilesView(APIView):
