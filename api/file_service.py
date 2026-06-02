@@ -428,65 +428,6 @@ class FileStorageService:
                     deleted_count += 1
         return deleted_count
 
-    # =========================
-    # Sharing & Links
-    # =========================
-
-    @staticmethod
-    def create_shareable_data(file_obj, request, duration_hours=1, emails=None, message=""):
-        """
-        Generate Secure Link and optionally send email to recipients
-        """
-        try:
-            hours = float(duration_hours) if duration_hours else 1.0
-        except (ValueError, TypeError):
-            hours = 1.0
-            
-        if hours <= 0:
-            hours = 1.0
-            
-        expiry = timezone.now() + timedelta(hours=hours)
-        shared_link = SharedLink.objects.create(
-            file=file_obj,
-            expires_at=expiry
-        )
-        
-        relative_url = reverse('public-download', kwargs={'token': shared_link.token})
-        full_url = request.build_absolute_uri(relative_url)
-        
-        # Email Notification Logic
-        if emails and isinstance(emails, list) and len(emails) > 0:
-            owner_name = request.user.get_full_name() or request.user.username
-            subject = f"{owner_name} shared a file with you: {file_obj.filename}"
-            
-            body = (
-                f"Hello,\n\n"
-                f"{owner_name} has shared a file with you via NexusShare.\n\n"
-                f"File: {file_obj.filename}\n"
-                f"Secure Link: {full_url}\n"
-                f"Expires In: {hours} hour{'s' if hours != 1 else ''}\n\n"
-            )
-            
-            if message:
-                body += f"Message from {owner_name}:\n\"{message}\"\n\n"
-                
-            body += "Please download the file before the link expires."
-
-            email = EmailMessage(
-                subject=subject,
-                body=body,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[settings.DEFAULT_FROM_EMAIL], 
-                bcc=emails, 
-            )
-            email.send(fail_silently=False)
-
-        return {
-            "download_url": full_url,
-            "filename": file_obj.filename,
-            "expires_at": shared_link.expires_at,
-            "sent_to": emails if emails else []
-        }
 
     # =========================
     # Analytics

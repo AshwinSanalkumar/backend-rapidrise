@@ -8,6 +8,7 @@ from django.core.mail import EmailMessage
 import shutil
 import os
 import logging
+from auth_service import AuthenticationService
 
 logger = logging.getLogger(__name__)
 
@@ -56,31 +57,20 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Cleanup complete. Deleted {deleted_count} out of {total_count} accounts."))
 
     def send_deletion_email(self, user):
-        """Sends the final account deletion notification."""
-        subject = "NexusShare — Account Deleted"
         context = {
-            'first_name': user.first_name,
-            'frontend_url': settings.FRONTEND_URL
+            "first_name": user.first_name,
+            "frontend_url": settings.FRONTEND_URL,
         }
-        
+
         try:
-            html_body = render_to_string('emails/account_deleted.html', context)
-        except Exception:
-            html_body = None
-
-        plain_text = (
-            f"Hi {user.first_name},\n\n"
-            f"As requested, your NexusShare account has been permanently deleted. "
-            f"All your data and files have been removed from our systems.\n\n"
-            f"Thank you for using NexusShare."
-        )
-
-        email = EmailMessage(
-            subject=subject,
-            body=html_body or plain_text,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email],
-        )
-        if html_body:
-            email.content_subtype = "html"
-        email.send(fail_silently=False)
+            AuthenticationService.send_template_email(
+                to_email=user.email,
+                to_name=f"{user.first_name} {user.last_name}",
+                subject="NexusShare — Account Deleted",
+                template_name="emails/account_deleted.html",
+                context=context,
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to send account deletion email to {user.email}: {str(e)}"
+            )

@@ -19,6 +19,7 @@ from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils import timezone
 from .serializers import UserSerializer
+from .email_service import BrevoEmailService
 
 logger = logging.getLogger('users')
 
@@ -26,6 +27,25 @@ token_generator = PasswordResetTokenGenerator()
 
 
 class AuthenticationService:
+    @staticmethod
+    def send_template_email(
+        to_email,
+        to_name,
+        subject,
+        template_name,
+        context
+    ):
+        html_content = render_to_string(
+            template_name,
+            context
+        )
+
+        BrevoEmailService.send_email(
+            to_email=to_email,
+            to_name=to_name,
+            subject=subject,
+            html_content=html_content
+        )
     @staticmethod
     def change_password(user, current_password, new_password):
         """Validates current password and updates to new password."""
@@ -58,33 +78,35 @@ class AuthenticationService:
         AuthenticationService.send_welcome_email(user)
         return user
     #welcome email
+
     @staticmethod
     def send_welcome_email(user):
 
         subject = "Welcome to NexusShare!"
+
         context = {
-            'first_name': user.first_name,
-            'frontend_url': settings.FRONTEND_URL
+            "first_name": user.first_name,
+            "frontend_url": settings.FRONTEND_URL,
         }
-        
-        html_body = render_to_string('emails/welcome.html', context)
-        
-        email = EmailMessage(
-            subject=subject,
-            body=html_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email],
+
+        html_body = render_to_string(
+            "emails/welcome.html",
+            context
         )
-        email.content_subtype = "html"
-        
+
         def send_async():
             try:
-                email.send(fail_silently=True)
-            except Exception:
-                pass
-                
-        threading.Thread(target=send_async).start()
-    
+                BrevoEmailService.send_email(
+                    to_email=user.email,
+                    to_name=f"{user.first_name} {user.last_name}",
+                    subject=subject,
+                    html_content=html_body
+                )
+            except Exception as e:
+                print(f"Welcome email failed: {e}")
+
+        threading.Thread(target=send_async, daemon=True).start()
+        
     @staticmethod
     def get_user_by_identity(user_data):
         """Internal helper to find a user by email."""
@@ -145,62 +167,63 @@ class AuthenticationService:
             f"/reset-password/{uid}/{token}/"
         )
 
-        subject = "Reset Your Password"
-
         duration = 10
-        context = {
-            'first_name': user.first_name,
-            'reset_url': reset_url,
-            'duration_minutes': duration,
-            'frontend_url': settings.FRONTEND_URL
-        }
-        
-        html_body = render_to_string('emails/password_reset.html', context)
-        
-        message = f"Hi {user.first_name},\n\nClick the link below to reset your password:\n{reset_url}\n\nThis link will expire in {duration} minutes.\n\nIf you did not request this, please ignore this email."
 
-        send_mail(
-            subject,
-            message,
-            settings.DEFAULT_FROM_EMAIL,
-            [user.email],
-            fail_silently=False,
-            html_message=html_body,
-        )
+        context = {
+            "first_name": user.first_name,
+            "reset_url": reset_url,
+            "duration_minutes": duration,
+            "frontend_url": settings.FRONTEND_URL,
+        }
+
+        def send_async():
+            try:
+                AuthenticationService.send_template_email(
+                    to_email=user.email,
+                    to_name=f"{user.first_name} {user.last_name}",
+                    subject="Reset Your Password",
+                    template_name="emails/password_reset.html",
+                    context=context,
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to send password reset email to {user.email}: {str(e)}"
+                )
+
+        threading.Thread(
+            target=send_async,
+            daemon=True
+        ).start()
 
     @staticmethod
     def send_password_reset_success_email(user):
 
-        subject = "Your NexusShare password has been reset"
         context = {
-            'first_name': user.first_name,
-            'timestamp': timezone.localtime(timezone.now()).strftime('%B %d, %Y at %I:%M %p'),
-            'frontend_url': settings.FRONTEND_URL
+            "first_name": user.first_name,
+            "timestamp": timezone.localtime(
+                timezone.now()
+            ).strftime("%B %d, %Y at %I:%M %p"),
+            "frontend_url": settings.FRONTEND_URL,
         }
-        
-        try:
-            html_body = render_to_string('emails/password_reset_success.html', context)
-        except Exception:
-            html_body = None
-            
-        plain = f"Hi {user.first_name},\n\nYour NexusShare password was successfully reset on {context['timestamp']}.\n\nIf you did not request this, please contact support immediately."
 
-        email = EmailMessage(
-            subject=subject,
-            body=html_body or plain,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email],
-        )
-        if html_body:
-            email.content_subtype = "html"
-        
         def send_async():
             try:
-                email.send(fail_silently=True)
-            except Exception:
-                pass
-                
-        threading.Thread(target=send_async).start()
+                AuthenticationService.send_template_email(
+                    to_email=user.email,
+                    to_name=f"{user.first_name} {user.last_name}",
+                    subject="Your NexusShare password has been reset",
+                    template_name="emails/password_reset_success.html",
+                    context=context,
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to send password reset success email to {user.email}: {str(e)}"
+                )
+
+        threading.Thread(
+            target=send_async,
+            daemon=True
+        ).start()
 
     @staticmethod
     def reset_password(uidb64, token, password):
@@ -237,8 +260,6 @@ class AuthenticationService:
 
     @staticmethod
     def send_reactivation_otp(email):
-        """Generate a 6-digit OTP, save it on the user, and email it."""
-
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
@@ -251,49 +272,41 @@ class AuthenticationService:
             return False, "Account cannot be reactivated."
 
         delta = timezone.now() - user.disabled_at
+
         if delta.days > 30:
             return False, "Reactivation window has expired. Account is scheduled for deletion."
 
         otp = str(random.randint(100000, 999999))
+
         user.activation_otp = otp
         user.activation_otp_created_at = timezone.now()
         user.save()
 
-        subject = "NexusShare — Account Reactivation OTP"
         context = {
-            'first_name': user.first_name,
-            'otp': otp,
-            'frontend_url': settings.FRONTEND_URL
+            "first_name": user.first_name,
+            "otp": otp,
+            "frontend_url": settings.FRONTEND_URL,
         }
-
-        try:
-            html_body = render_to_string('emails/reactivation_otp.html', context)
-        except Exception:
-            html_body = None
-
-        plain = (
-            f"Hi {user.first_name},\n\n"
-            f"Your account reactivation OTP is: {otp}\n\n"
-            f"This code expires in 10 minutes.\n\n"
-            f"If you did not request this, please ignore this email."
-        )
-
-        email_msg = EmailMessage(
-            subject=subject,
-            body=html_body or plain,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email],
-        )
-        if html_body:
-            email_msg.content_subtype = "html"
 
         def send_async():
             try:
-                email_msg.send(fail_silently=True)
-            except Exception:
-                pass
+                AuthenticationService.send_template_email(
+                    to_email=user.email,
+                    to_name=f"{user.first_name} {user.last_name}",
+                    subject="NexusShare — Account Reactivation OTP",
+                    template_name="emails/reactivation_otp.html",
+                    context=context,
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to send reactivation OTP to {user.email}: {str(e)}"
+                )
 
-        threading.Thread(target=send_async).start()
+        threading.Thread(
+            target=send_async,
+            daemon=True
+        ).start()
+
         return True, "OTP sent to your registered email."
 
     @staticmethod

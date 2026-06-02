@@ -314,58 +314,67 @@ class DeactivateAccountView(APIView):
 
     def post(self, request):
         password = request.data.get('password')
+
         if not password:
-            return Response({"error": "Password is required."}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {"error": "Password is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         user = request.user
+
         if not user.check_password(password):
-            return Response({"error": "Incorrect password."}, status=status.HTTP_400_BAD_REQUEST)
-            
+            return Response(
+                {"error": "Incorrect password."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         user.is_active = False
         user.disabled_at = timezone.now()
         user.save()
 
-        # Send deactivation success email
-        deletion_date = (user.disabled_at + timedelta(days=30)).strftime('%B %d, %Y')
-        
+        deletion_date = (
+            user.disabled_at + timedelta(days=30)
+        ).strftime('%B %d, %Y')
+
         context = {
-            'first_name': user.first_name,
-            'deletion_date': deletion_date,
-            'frontend_url': settings.FRONTEND_URL
+            "first_name": user.first_name,
+            "deletion_date": deletion_date,
+            "frontend_url": settings.FRONTEND_URL
         }
-
-        try:
-            html_body = render_to_string('emails/deactivate_success.html', context)
-        except Exception:
-            html_body = None
-
-        plain = (
-            f"Hi {user.first_name},\n\n"
-            f"Your account deactivation was successful. Your account is now disabled and will be completely deleted on {deletion_date} (after 30 days).\n\n"
-            f"To regain access to your account and abort the deletion process, please login before this date.\n"
-        )
-
-        email_msg = EmailMessage(
-            subject="NexusShare — Account Deactivated",
-            body=html_body or plain,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email],
-        )
-        if html_body:
-            email_msg.content_subtype = "html"
 
         def send_async():
             try:
-                email_msg.send(fail_silently=True)
-            except Exception:
-                pass
+                html_body = render_to_string(
+                    "emails/deactivate_success.html",
+                    context
+                )
 
-        threading.Thread(target=send_async).start()
-        
-        response = Response({"message": "Account deactivated successfully."}, status=status.HTTP_200_OK)
-        # Clear out cookies to logout
-        response.delete_cookie('access_token')
-        response.delete_cookie('refresh_token')
+                BrevoEmailService.send_email(
+                    to_email=user.email,
+                    to_name=f"{user.first_name} {user.last_name}",
+                    subject="NexusShare — Account Deactivated",
+                    html_content=html_body
+                )
+
+            except Exception as e:
+                logger.error(
+                    f"Failed to send deactivation email to {user.email}: {str(e)}"
+                )
+
+        threading.Thread(
+            target=send_async,
+            daemon=True
+        ).start()
+
+        response = Response(
+            {"message": "Account deactivated successfully."},
+            status=status.HTTP_200_OK
+        )
+
+        response.delete_cookie("access_token")
+        response.delete_cookie("refresh_token")
+
         return response
 
 #---------------------------------------------------------------------------------------------

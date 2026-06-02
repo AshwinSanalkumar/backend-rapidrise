@@ -17,16 +17,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def send_email_async(email):
-    """
-    Helper function to send email in a background thread.
-    """
-    try:
-        email.send(fail_silently=False)
-        logger.info("Email sent successfully")
-    except Exception as e:
-        logger.exception(f"Failed to send email: {str(e)}")
-
 class FileShareService:
     @staticmethod
     def bulk_share_files(user, file_ids, request, data):
