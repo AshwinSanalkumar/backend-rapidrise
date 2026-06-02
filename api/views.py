@@ -64,18 +64,27 @@ import socket
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
+import socket
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
 class SMTPTestView(APIView):
     permission_classes = []
 
     def get(self, request):
-        try:
-            socket.create_connection(
-                ("smtp-relay.brevo.com", 587),
-                timeout=10
-            )
-            return Response({"status": "connected"})
-        except Exception as e:
-            return Response({"error": str(e)})
+        results = {}
+
+        for port in [25, 465, 587]:
+            try:
+                socket.create_connection(
+                    ("smtp-relay.brevo.com", port),
+                    timeout=10
+                )
+                results[str(port)] = "connected"
+            except Exception as e:
+                results[str(port)] = str(e)
+
+        return Response(results)
     
 
 class StandardPagination(PageNumberPagination):
