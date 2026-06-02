@@ -60,7 +60,24 @@ class TestMailView(APIView):
 
         return Response({"message": "Email sent"})
     
+import socket
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+class SMTPTestView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        try:
+            socket.create_connection(
+                ("smtp-relay.brevo.com", 587),
+                timeout=10
+            )
+            return Response({"status": "connected"})
+        except Exception as e:
+            return Response({"error": str(e)})
     
+
 class StandardPagination(PageNumberPagination):
     page_size = 8
     page_size_query_param = 'page_size'
