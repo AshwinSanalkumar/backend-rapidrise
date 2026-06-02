@@ -96,15 +96,19 @@ class AuthenticationService:
         def send_async():
             try:
                 BrevoEmailService.send_email(
-                    to_email=user.email,
-                    to_name=f"{user.first_name} {user.last_name}",
                     subject=subject,
-                    html_content=html_body
+                    html_content=html_body,
+                    recipients=[user.email]
                 )
             except Exception as e:
-                print(f"Welcome email failed: {e}")
+                logger.exception(
+                    f"Welcome email failed for {user.email}: {str(e)}"
+                )
 
-        threading.Thread(target=send_async, daemon=True).start()
+        threading.Thread(
+            target=send_async,
+            daemon=True
+        ).start()
         
     @staticmethod
     def get_user_by_identity(user_data):
@@ -166,12 +170,10 @@ class AuthenticationService:
             f"/reset-password/{uid}/{token}/"
         )
 
-        duration = 10
-
         context = {
             "first_name": user.first_name,
             "reset_url": reset_url,
-            "duration_minutes": duration,
+            "duration_minutes": 10,
             "frontend_url": settings.FRONTEND_URL,
         }
 
@@ -179,13 +181,13 @@ class AuthenticationService:
             try:
                 AuthenticationService.send_template_email(
                     to_email=user.email,
-                    to_name=f"{user.first_name} {user.last_name}",
                     subject="Reset Your Password",
                     template_name="emails/password_reset.html",
                     context=context,
                 )
+
             except Exception as e:
-                logger.error(
+                logger.exception(
                     f"Failed to send password reset email to {user.email}: {str(e)}"
                 )
 
@@ -209,13 +211,12 @@ class AuthenticationService:
             try:
                 AuthenticationService.send_template_email(
                     to_email=user.email,
-                    to_name=f"{user.first_name} {user.last_name}",
                     subject="Your NexusShare password has been reset",
                     template_name="emails/password_reset_success.html",
                     context=context,
                 )
             except Exception as e:
-                logger.error(
+                logger.exception(
                     f"Failed to send password reset success email to {user.email}: {str(e)}"
                 )
 

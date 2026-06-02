@@ -351,10 +351,9 @@ class DeactivateAccountView(APIView):
                 )
 
                 BrevoEmailService.send_email(
-                    to_email=user.email,
-                    to_name=f"{user.first_name} {user.last_name}",
                     subject="NexusShare — Account Deactivated",
-                    html_content=html_body
+                    html_content=html_body,
+                    recipients=[user.email]
                 )
 
             except Exception as e:
@@ -372,8 +371,17 @@ class DeactivateAccountView(APIView):
             status=status.HTTP_200_OK
         )
 
-        response.delete_cookie("access_token")
-        response.delete_cookie("refresh_token")
+        response.delete_cookie(
+            key="access_token",
+            path="/",
+            samesite="None",
+        )
+
+        response.delete_cookie(
+            key="refresh_token",
+            path="/",
+            samesite="None",
+)
 
         return response
 

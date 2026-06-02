@@ -65,12 +65,12 @@ class Command(BaseCommand):
         try:
             AuthenticationService.send_template_email(
                 to_email=user.email,
-                to_name=f"{user.first_name} {user.last_name}",
                 subject="NexusShare — Account Deleted",
                 template_name="emails/account_deleted.html",
                 context=context,
             )
+
         except Exception as e:
-            logger.error(
+            logger.exception(
                 f"Failed to send account deletion email to {user.email}: {str(e)}"
             )
