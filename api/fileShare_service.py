@@ -180,15 +180,16 @@ class FileShareService:
         
         html_body = render_to_string('emails/file_share.html', context)
 
-        email = EmailMessage(
-            subject=subject,
-            body=html_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=recipients if len(recipients) == 1 else [],
-            bcc=recipients if len(recipients) > 1 else [],
-        )
-        email.content_subtype = "html"
-        email.send(fail_silently=False)
+        from .email_service import BrevoEmailService
+
+        try:
+            BrevoEmailService.send_email(
+                subject=subject,
+                html_content=html_body,
+                recipients=recipients
+            )
+        except Exception as e:
+            logger.exception(f"Failed to send email: {str(e)}")
 
     @staticmethod
     def get_file_from_token(token_str, increment_type=None):
