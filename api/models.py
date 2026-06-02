@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.conf import settings
 import uuid
+from datetime import timedelta
 from django.utils import timezone
 
 class UserManager(BaseUserManager):
@@ -161,8 +162,6 @@ class ChunkedUpload(models.Model):
         ordering = ['-updated_at']
 
 def default_file_request_expiry():
-    from datetime import timedelta
-    from django.utils import timezone
     return timezone.now() + timedelta(hours=24)
 
 class FileRequest(models.Model):

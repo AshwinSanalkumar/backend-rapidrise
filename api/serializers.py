@@ -1,7 +1,11 @@
 from rest_framework import serializers
-from .models import User
 import re
-from .models import User, UserFile, UserFolder, SharedLink, Workstation, WorkstationMember, WorkstationInvite, WorkstationVersion, ChunkedUpload
+from datetime import date
+from .models import (
+    User, UserFile, UserFolder, SharedLink, Workstation, 
+    WorkstationMember, WorkstationInvite, WorkstationVersion, 
+    ChunkedUpload, FileRequest
+)
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
@@ -15,12 +19,25 @@ class UserSerializer(serializers.ModelSerializer):
         return f"{obj.first_name} {obj.last_name}".strip()
 
     def validate_dob(self, value):
-        from datetime import date
         today = date.today()
         age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
         if age < 15:
             raise serializers.ValidationError("You must be at least 15 years old.")
         return value
+
+    def validate_first_name(self, value):
+        if not re.match(r"^[a-zA-Z\s\-]+$", value):
+            raise serializers.ValidationError("First name should only contain letters, spaces, or hyphens.")
+        if len(value.strip()) < 2:
+            raise serializers.ValidationError("First name must be at least 2 characters long.")
+        return value.strip()
+
+    def validate_last_name(self, value):
+        if not re.match(r"^[a-zA-Z\s\-]+$", value):
+            raise serializers.ValidationError("Last name should only contain letters, spaces, or hyphens.")
+        if len(value.strip()) < 1: # Last name can be short, but not empty
+            raise serializers.ValidationError("Last name cannot be empty.")
+        return value.strip()
 
 class RegistrationSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)
@@ -92,12 +109,25 @@ class RegistrationSerializer(serializers.Serializer):
         return normalized_email
 
     def validate_dob(self, value):
-        from datetime import date
         today = date.today()
         age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
         if age < 15:
             raise serializers.ValidationError("You must be at least 15 years old to register.")
         return value
+
+    def validate_first_name(self, value):
+        if not re.match(r"^[a-zA-Z\s\-]+$", value):
+            raise serializers.ValidationError("First name should only contain letters, spaces, or hyphens.")
+        if len(value.strip()) < 2:
+            raise serializers.ValidationError("First name must be at least 2 characters long.")
+        return value.strip()
+
+    def validate_last_name(self, value):
+        if not re.match(r"^[a-zA-Z\s\-]+$", value):
+            raise serializers.ValidationError("Last name should only contain letters, spaces, or hyphens.")
+        if len(value.strip()) < 1:
+            raise serializers.ValidationError("Last name cannot be empty.")
+        return value.strip()
 
 class PasswordValidationSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, min_length=8)
@@ -229,7 +259,6 @@ class WorkstationVersionSerializer(serializers.ModelSerializer):
             return f"{obj.saved_by.first_name} {obj.saved_by.last_name}"
         return "Unknown"
 
-from .models import FileRequest
 
 class FileRequestSerializer(serializers.ModelSerializer):
     sender_email = serializers.EmailField(source='sender.email', read_only=True)

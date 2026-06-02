@@ -302,3 +302,77 @@ PASSWORD_RESET_TIMEOUT = int(
     os.environ.get("PASSWORD_RESET_TIMEOUT", 600)
 )
 
+
+# --- LOGGING CONFIGURATION ---
+
+LOGS_DIR = BASE_DIR / 'logs'
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {
+            "format": "[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s",
+            "datefmt": "%d/%b/%Y %H:%M:%S"
+        },
+    },
+    "handlers": {
+        "general_file": {
+            "class": "logging.FileHandler",
+            "filename": LOGS_DIR / "general.log",
+            "formatter": "standard",
+        },
+        "auth_file": {
+            "class": "logging.FileHandler",
+            "filename": LOGS_DIR / "auth.log",
+            "formatter": "standard",
+        },
+        "file_file": {
+            "class": "logging.FileHandler",
+            "filename": LOGS_DIR / "file.log",
+            "formatter": "standard",
+        },
+        "workstation_file": {
+            "class": "logging.FileHandler",
+            "filename": LOGS_DIR / "workstation.log",
+            "formatter": "standard",
+        },
+        "folder_file": {
+            "class": "logging.FileHandler",
+            "filename": LOGS_DIR / "folder.log",
+            "formatter": "standard",
+        },
+    },
+    "loggers": {
+        "": {
+            "handlers": ["general_file"],
+            "level": "INFO",
+        },
+        "users": {
+            "handlers": ["auth_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "files": {
+            "handlers": ["file_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "workstations": {
+            "handlers": ["workstation_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "collections": {
+            "handlers": ["folder_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.utils.autoreload": {
+            "handlers": ["general_file"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}

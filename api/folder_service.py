@@ -1,16 +1,23 @@
-from django.db.models import Count, Sum, Q
+import logging
+from django.db.models import Count, Sum, Q, Value
 from django.shortcuts import get_object_or_404
-from .models import UserFolder,UserFile
-from django.db.models import Count, Sum, Value
+from .models import UserFolder, UserFile
 from django.db.models.functions import Coalesce
 from rest_framework.exceptions import ValidationError
 
+logger = logging.getLogger('collections')
+
 class FolderService:
     @staticmethod
-    def get_user_folders(user):
+    def get_user_folders(user, search_term=None):
         """Fetches folders with file counts and sizes, excluding deleted files."""
         active_files = Q(files__is_deleted=False)
-        return UserFolder.objects.filter(owner=user).annotate(
+        query = Q(owner=user)
+        
+        if search_term:
+            query &= Q(name__icontains=search_term)
+
+        return UserFolder.objects.filter(query).annotate(
             files_count=Count('files', filter=active_files),
             total_size=Coalesce(Sum('files__file_size_bytes', filter=active_files), 0)
         ).order_by('-created_at')
@@ -19,7 +26,9 @@ class FolderService:
     def create_folder(user, name):
         if UserFolder.objects.filter(owner=user, name__iexact=name).exists():
             raise ValidationError(f"A folder named '{name}' already exists.")
-        return UserFolder.objects.create(owner=user, name=name)
+        folder = UserFolder.objects.create(owner=user, name=name)
+        logger.info(f"ACTION PERFORMED: Folder created: {name} (ID: {folder.id}) for user {user.email}")
+        return folder
 
     @staticmethod
     def update_folder(user, folder_id, name):
@@ -33,7 +42,9 @@ class FolderService:
     @staticmethod
     def delete_folder(user, folder_id):
         folder = get_object_or_404(UserFolder, id=folder_id, owner=user)
+        name = folder.name
         folder.delete()
+        logger.info(f"ACTION PERFORMED: Folder deleted: {name} (ID: {folder_id})")
         return True
     
     @staticmethod

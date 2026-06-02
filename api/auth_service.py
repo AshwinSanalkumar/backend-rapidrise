@@ -1,3 +1,7 @@
+import logging
+import threading
+import re
+import random
 from .models import User
 from django.core.exceptions import ValidationError
 from rest_framework.response import Response
@@ -10,12 +14,13 @@ from django.utils.encoding import (
     force_bytes,
     force_str
 )
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMessage
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils import timezone
-import resend
+from .serializers import UserSerializer
 
+logger = logging.getLogger('users')
 
 token_generator = PasswordResetTokenGenerator()
 
@@ -24,6 +29,7 @@ class AuthenticationService:
     @staticmethod
     def change_password(user, current_password, new_password):
         """Validates current password and updates to new password."""
+        logger.info(f"ACTION PERFORMED: Password change request for user {user.email}")
         if not current_password or not new_password:
             raise ValueError("Both current and new passwords are required.")
         
@@ -48,13 +54,12 @@ class AuthenticationService:
             last_name=last_name,
             dob=dob
         )
+        logger.info(f"ACTION PERFORMED: New user registered: {email}")
         AuthenticationService.send_welcome_email(user)
         return user
     #welcome email
     @staticmethod
     def send_welcome_email(user):
-        import threading
-        from django.core.mail import EmailMessage
 
         subject = "Welcome to NexusShare!"
         context = {
@@ -96,7 +101,6 @@ class AuthenticationService:
         """
         Business logic to transform a JWT body response into HttpOnly cookies.
         """
-        from .serializers import UserSerializer
         user = AuthenticationService.get_user_by_identity(user_data)
         response.data['user'] = UserSerializer(user).data
         access_token = response.data.pop('access', None)
@@ -107,8 +111,8 @@ class AuthenticationService:
                 key='access_token',
                 value=access_token,
                 httponly=True,
-                secure=True, 
-                samesite='None',
+                secure=False, 
+                samesite='Lax',
                 max_age=int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),   
             )
 
@@ -117,8 +121,8 @@ class AuthenticationService:
                 key='refresh_token',
                 value=refresh_token,
                 httponly=True,
-                secure=True,
-                samesite='None',
+                secure=False,
+                samesite='Lax',
                 max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()), 
             )
 
@@ -155,26 +159,17 @@ class AuthenticationService:
         
         message = f"Hi {user.first_name},\n\nClick the link below to reset your password:\n{reset_url}\n\nThis link will expire in {duration} minutes.\n\nIf you did not request this, please ignore this email."
 
-        resend.api_key = settings.RESEND_API_KEY
-
-        try:
-            result = resend.Emails.send({
-                "from": "NexusShare <onboarding@resend.dev>",
-                "to": [user.email],
-                "subject": subject,
-                "text": message,
-                "html": html_body,
-            })
-            print("PASSWORD RESET EMAIL SENT:", result)
-        except Exception as e:
-            print("PASSWORD RESET EMAIL ERROR:", str(e))
-            raise
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=False,
+            html_message=html_body,
+        )
 
     @staticmethod
     def send_password_reset_success_email(user):
-        import threading
-        from django.core.mail import EmailMessage
-        from django.utils import timezone
 
         subject = "Your NexusShare password has been reset"
         context = {
@@ -209,21 +204,17 @@ class AuthenticationService:
 
     @staticmethod
     def reset_password(uidb64, token, password):
-
         try:
             uid = force_str(
                 urlsafe_base64_decode(uidb64)
             )
-
             user = User.objects.get(pk=uid)
-
         except Exception:
             return False, "Invalid reset link"
 
         if not token_generator.check_token(user, token):
             return False, "Token expired or invalid"
 
-        import re
         if len(password) < 8:
             return False, "Password must be at least 8 characters long"
         if not re.search(r"[a-z]", password):
@@ -247,8 +238,6 @@ class AuthenticationService:
     @staticmethod
     def send_reactivation_otp(email):
         """Generate a 6-digit OTP, save it on the user, and email it."""
-        import random, threading
-        from django.core.mail import EmailMessage
 
         try:
             user = User.objects.get(email=email)
@@ -322,8 +311,7 @@ class AuthenticationService:
             return False, "No OTP was requested. Please request a new one."
 
         # Check 10-minute expiry
-        from django.utils import timezone as tz
-        delta = tz.now() - user.activation_otp_created_at
+        delta = timezone.now() - user.activation_otp_created_at
         if delta.total_seconds() > 600:
             user.activation_otp = None
             user.activation_otp_created_at = None

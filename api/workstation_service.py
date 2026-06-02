@@ -1,10 +1,13 @@
 from django.shortcuts import get_object_or_404
 from django.db import models
 from django.contrib.auth import get_user_model
+import logging
+from rest_framework.exceptions import ValidationError
 from .models import Workstation, WorkstationMember, WorkstationInvite, WorkstationVersion
 from .serializers import WorkstationSerializer, WorkstationInviteSerializer, UserSearchSerializer, WorkstationVersionSerializer
 
 User = get_user_model()
+logger = logging.getLogger('workstations')
 
 class WorkstationService:
     @staticmethod
@@ -17,19 +20,18 @@ class WorkstationService:
         """Create a new workstation and make the user the owner/member."""
         # Limit to 10 workstations per user
         if Workstation.objects.filter(owner=user).count() >= 10:
-            from rest_framework.exceptions import ValidationError
             raise ValidationError("You have reached the maximum limit of 10 workstations.")
 
         serializer = WorkstationSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         workstation = serializer.save(owner=user)
         
-        # Automatically make owner a member with OWNER role
         WorkstationMember.objects.create(
             workstation=workstation,
             user=user,
             role='OWNER'
         )
+        logger.info(f"ACTION PERFORMED: Workstation created: {workstation.title} (ID: {workstation.id}) by user {user.email}")
         return workstation
 
     @staticmethod
@@ -127,6 +129,7 @@ class WorkstationService:
     def delete_workstation(user, workstation_id):
         """Delete workstation if the user is the owner."""
         workstation = get_object_or_404(Workstation, id=workstation_id, owner=user)
+        logger.info(f"ACTION PERFORMED: Workstation deleted: {workstation.title} (ID: {workstation.id}) by user {user.email}")
         workstation.delete()
         return True
 

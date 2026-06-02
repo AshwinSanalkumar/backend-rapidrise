@@ -1,29 +1,43 @@
+import logging
+import threading
+import os
+import zipfile
+from io import BytesIO
+from uuid import UUID
+from datetime import timedelta
+from docx import Document
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.db import models
+from django.shortcuts import get_object_or_404
+from django.views.decorators.clickjacking import xframe_options_exempt
+from django.utils import timezone
+from django.http import FileResponse, HttpResponse
+from django.conf import settings
+from django.template.loader import render_to_string
+from .models import User, UserFile, UserFolder, SharedLink, Workstation, WorkstationInvite, WorkstationMember, ChunkedUpload
 from .serializers import (
     RegistrationSerializer, UserFileSerializer, FolderSerializer, 
     SharedLinkSerializer, UserSerializer, WorkstationSerializer,
     WorkstationInviteSerializer, UserSearchSerializer, WorkstationVersionSerializer,
-    PasswordValidationSerializer, ChunkedUploadSerializer
+    PasswordValidationSerializer, ChunkedUploadSerializer, FileRequestSerializer
 )
 from .auth_service import AuthenticationService
 from .file_service import FileStorageService
 from .folder_service import FolderService
 from .fileShare_service import FileShareService
-from rest_framework.permissions import  IsAuthenticated, AllowAny
-from django.db import models
-from .models import User, UserFile, UserFolder, SharedLink, Workstation, WorkstationInvite, WorkstationMember, ChunkedUpload
-from uuid import UUID
-from django.shortcuts import get_object_or_404
-from rest_framework.exceptions import ValidationError
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.views.decorators.clickjacking import xframe_options_exempt
-from django.utils import timezone
-from django.http import FileResponse
-from rest_framework.pagination import PageNumberPagination
-from django.conf import settings
+from .workstation_service import WorkstationService
+from .request_service import RequestService
+from django.core.mail import EmailMessage
+
+logger = logging.getLogger('users')
+
 
 class StandardPagination(PageNumberPagination):
     page_size = 8
@@ -69,6 +83,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
         if response.status_code == 200:
             # Apply your decoupled service logic
             response = AuthenticationService.token_service(response, request.data)
+            logger.info(f"ACTION PERFORMED: User logged in: {email}")
         return response
     
 class SendReactivationOTPView(APIView):
@@ -119,7 +134,6 @@ class CookieTokenRefreshView(APIView):
             # Get user from token
             user_id = old_refresh.payload.get('user_id')
 
-            from .models import User  # adjust import
             user = User.objects.get(id=user_id)
 
             # Blacklist old refresh token
@@ -141,8 +155,8 @@ class CookieTokenRefreshView(APIView):
                 key='access_token',
                 value=str(new_access),
                 httponly=True,
-                secure=True,
-                samesite='None',
+                secure=not settings.DEBUG,
+                samesite='Lax',
                 max_age=int(
                     settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()
                 ),
@@ -152,8 +166,8 @@ class CookieTokenRefreshView(APIView):
                 key='refresh_token',
                 value=str(new_refresh),
                 httponly=True,
-                secure=True,
-                samesite='None',
+                secure=not settings.DEBUG,
+                samesite='Lax',
                 max_age=int(
                     settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()
                 ),
@@ -181,6 +195,12 @@ class LogoutView(APIView):
         response = Response({'message': 'Logged out'})
         response.delete_cookie('access_token')
         response.delete_cookie('refresh_token')
+        
+        user_email = "Unknown"
+        if request.user and request.user.is_authenticated:
+            user_email = request.user.email
+            
+        logger.info(f"ACTION PERFORMED: User logged out: {user_email}")
         return response
 
 class UserDetailView(APIView):
@@ -287,12 +307,6 @@ class DeactivateAccountView(APIView):
         user.save()
 
         # Send deactivation success email
-        import threading
-        from django.core.mail import EmailMessage
-        from django.template.loader import render_to_string
-        from django.conf import settings
-        from datetime import timedelta
-
         deletion_date = (user.disabled_at + timedelta(days=30)).strftime('%B %d, %Y')
         
         context = {
@@ -583,8 +597,9 @@ class EmptyTrashView(APIView):
 class FolderListView(APIView):
     """GET /assets/list/ and POST /assets/create/"""
     def get(self, request):
-        folders = FolderService.get_user_folders(request.user)
-        if not folders.exists():
+        search_term = request.query_params.get('search')
+        folders = FolderService.get_user_folders(request.user, search_term)
+        if not folders.exists() and not search_term:
             return Response({
                 "message": "You haven't created any folders yet.",
                 "folders": []
@@ -664,10 +679,6 @@ class FolderContentDeleteView(APIView):
     
 #---------------------------------------------------------------------------------------------        
 #FILE SHARE VIEWS
-import zipfile
-from io import BytesIO
-from django.core.files.base import ContentFile
-from django.utils import timezone
 
 class BulkShareView(APIView):
     permission_classes = [IsAuthenticated]
@@ -763,7 +774,11 @@ class PublicFileView(APIView):
 
         file_handle = file_obj.content.open('rb')
         response = FileResponse(file_handle, content_type=file_obj.mime_type)
-        response['Content-Disposition'] = f'attachment; filename="{file_obj.filename}"'
+        
+        if is_download:
+            response['Content-Disposition'] = f'attachment; filename="{file_obj.filename}"'
+        else:
+            response['Content-Disposition'] = f'inline; filename="{file_obj.filename}"'
 
         # Add tracking headers via service
         headers = FileShareService.get_public_tracking_headers(shared_link)
@@ -857,7 +872,6 @@ class CleanupDuplicatesView(APIView):
         }, status=status.HTTP_200_OK)
 
 
-from .workstation_service import WorkstationService
 
 # ---------------------------------------------------------------------------------------------
 # WORKSTATION VIEWS
@@ -952,6 +966,8 @@ class ChunkedUploadInitView(APIView):
         try:
             chunked_upload = FileStorageService.init_chunked_upload(request.user, filename, int(total_size))
             return Response(ChunkedUploadSerializer(chunked_upload).data, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -971,6 +987,8 @@ class ChunkedUploadChunkView(APIView):
         try:
             FileStorageService.save_chunk(chunked_upload, chunk_file, int(offset))
             return Response(ChunkedUploadSerializer(chunked_upload).data)
+        except ValidationError as e:
+            return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -990,6 +1008,8 @@ class ChunkedUploadCompleteView(APIView):
         try:
             user_file = FileStorageService.finalize_chunked_upload(chunked_upload, display_name, description)
             return Response(UserFileSerializer(user_file).data, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1002,7 +1022,6 @@ class ChunkedUploadStatusView(APIView):
 
     def delete(self, request, upload_id):
         chunked_upload = get_object_or_404(ChunkedUpload, upload_id=upload_id, user=request.user)
-        import os
         if os.path.exists(chunked_upload.file_path):
             os.remove(chunked_upload.file_path)
         chunked_upload.delete()
@@ -1087,10 +1106,6 @@ class WorkstationMemberView(APIView):
 # ---------------------------------------------------------------------------------------------
 # EXPORT VIEWS
 
-from io import BytesIO
-from django.http import HttpResponse
-from docx import Document
-
 class WorkstationExportView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1126,11 +1141,7 @@ class WorkstationExportView(APIView):
         return response
 
 
-# ---------------------------------------------------------------------------------------------
 # FILE REQUEST VIEWS
-
-from .serializers import FileRequestSerializer
-from .request_service import RequestService
 
 class CreateFileRequestView(APIView):
     permission_classes = [IsAuthenticated]
