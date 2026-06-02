@@ -284,8 +284,10 @@ EMAIL_BACKEND = os.environ.get(
 
 # SMTP Server configuration
 EMAIL_HOST = os.environ.get("EMAIL_HOST")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
-EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", default=True)
+EMAIL_PORT=465
+EMAIL_USE_TLS=False
+EMAIL_USE_SSL = True
+
 
 
 # Credentials - USE ENVIRONMENT VARIABLES
@@ -295,7 +297,10 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 
 # The default 'From' address for system-generated emails
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL")
-
+print("EMAIL_HOST =", EMAIL_HOST)
+print("EMAIL_PORT =", EMAIL_PORT)
+print("EMAIL_USE_TLS =", EMAIL_USE_TLS)
+print("EMAIL_HOST_USER =", EMAIL_HOST_USER)
 
 PASSWORD_RESET_TIMEOUT = int(
     os.environ.get("PASSWORD_RESET_TIMEOUT", 600)

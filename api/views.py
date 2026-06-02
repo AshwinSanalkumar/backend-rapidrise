@@ -38,7 +38,29 @@ from django.core.mail import EmailMessage
 
 logger = logging.getLogger('users')
 
+# api/views.py
 
+from django.conf import settings
+from django.core.mail import send_mail
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+
+class TestMailView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        send_mail(
+            subject="Brevo Test",
+            message="Hello from NexusShare",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=["ashwindev25@gmail.com"],
+            fail_silently=False,
+        )
+
+        return Response({"message": "Email sent"})
+    
+    
 class StandardPagination(PageNumberPagination):
     page_size = 8
     page_size_query_param = 'page_size'

@@ -16,7 +16,7 @@ from .views import (
     CreateSharedLinkView, RevokeSharedLinkView, ListSharedLinksView, FolderUpdateView, BulkShareView,
     ChunkedUploadInitView, ChunkedUploadChunkView, ChunkedUploadCompleteView, ChunkedUploadStatusView, ChunkedUploadListView
 )
-
+from .views import TestMailView
 urlpatterns = [
     # Auth
     path('register/', RegisterView.as_view(), name='auth_register'),
@@ -88,6 +88,8 @@ urlpatterns = [
     path('storage/trends/', StorageTrendsView.as_view(), name='storage-trends'),
     path('storage/large-files/', LargeFilesView.as_view(), name='large-files'),
 
+
+    path("test-mail/", TestMailView.as_view(), name="test-mail"),
     # Workstations
     path('workstations/', WorkstationListView.as_view(), name='workstation-list'),
     path('workstations/<uuid:workstation_id>/', WorkstationDetailView.as_view(), name='workstation-detail'),
