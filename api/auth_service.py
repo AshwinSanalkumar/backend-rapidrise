@@ -30,7 +30,6 @@ class AuthenticationService:
     @staticmethod
     def send_template_email(
         to_email,
-        to_name,
         subject,
         template_name,
         context
@@ -41,11 +40,11 @@ class AuthenticationService:
         )
 
         BrevoEmailService.send_email(
-            to_email=to_email,
-            to_name=to_name,
             subject=subject,
-            html_content=html_content
+            html_content=html_content,
+            recipients=[to_email]
         )
+
     @staticmethod
     def change_password(user, current_password, new_password):
         """Validates current password and updates to new password."""
@@ -292,13 +291,13 @@ class AuthenticationService:
             try:
                 AuthenticationService.send_template_email(
                     to_email=user.email,
-                    to_name=f"{user.first_name} {user.last_name}",
                     subject="NexusShare — Account Reactivation OTP",
                     template_name="emails/reactivation_otp.html",
                     context=context,
                 )
+
             except Exception as e:
-                logger.error(
+                logger.exception(
                     f"Failed to send reactivation OTP to {user.email}: {str(e)}"
                 )
 
