@@ -39,54 +39,25 @@ from django.core.mail import EmailMessage
 logger = logging.getLogger('users')
 
 # api/views.py
-
-from django.conf import settings
-from django.core.mail import send_mail
 from rest_framework.views import APIView
 from rest_framework.response import Response
+
+from .email_service import BrevoEmailService
 
 
 class TestMailView(APIView):
     permission_classes = []
 
     def get(self, request):
-        send_mail(
-            subject="Brevo Test",
-            message="Hello from NexusShare",
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=["ashwindev25@gmail.com"],
-            fail_silently=False,
+
+        result = BrevoEmailService.send_email(
+            subject="Brevo API Test",
+            html_content="<h1>Hello from NexusShare</h1>",
+            recipients=["ashwindev25@gmail.com"]
         )
 
-        return Response({"message": "Email sent"})
+        return Response(result)
     
-import socket
-from rest_framework.views import APIView
-from rest_framework.response import Response
-
-import socket
-from rest_framework.views import APIView
-from rest_framework.response import Response
-
-class SMTPTestView(APIView):
-    permission_classes = []
-
-    def get(self, request):
-        results = {}
-
-        for port in [25, 465, 587]:
-            try:
-                socket.create_connection(
-                    ("smtp-relay.brevo.com", port),
-                    timeout=10
-                )
-                results[str(port)] = "connected"
-            except Exception as e:
-                results[str(port)] = str(e)
-
-        return Response(results)
-    
-
 class StandardPagination(PageNumberPagination):
     page_size = 8
     page_size_query_param = 'page_size'

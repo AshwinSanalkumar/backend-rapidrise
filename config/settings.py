@@ -283,6 +283,7 @@ EMAIL_BACKEND = os.environ.get(
 )
 
 # SMTP Server configuration
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY")
 EMAIL_HOST = os.environ.get("EMAIL_HOST")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
 EMAIL_USE_TLS = str(
