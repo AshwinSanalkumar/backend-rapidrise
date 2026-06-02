@@ -1,18 +1,25 @@
 # SERVICES FOR FILE UPLOAD DOWNLOAD.
+import logging
 import hashlib
+import magic
+import mimetypes
+import os
+import uuid
+import calendar
+from datetime import datetime, date, timedelta
+from collections import defaultdict
 from rest_framework.exceptions import ValidationError
 from django.conf import settings
-from .models import UserFile, SharedLink
-from collections import defaultdict
 from django.utils import timezone
-import calendar
-from datetime import datetime, date
-from django.db.models import Count, Sum
 from django.utils.timezone import make_aware
-from datetime import timedelta
+from django.db.models import Count, Sum, Q, Case, When, Value, IntegerField
 from django.urls import reverse
 from django.core.mail import EmailMessage
 from django.db import transaction
+from django.core.files import File as DjangoFile
+from .models import UserFile, SharedLink, User, ChunkedUpload
+
+logger = logging.getLogger('files')
 
 
 class FileStorageService:
@@ -48,7 +55,6 @@ class FileStorageService:
             queryset = queryset.filter(is_favorite=True)
             
         if search_term:
-            from django.db.models import Q
             queryset = queryset.filter(
                 Q(display_name__icontains=search_term) |
                 Q(filename__icontains=search_term) |
@@ -86,8 +92,6 @@ class FileStorageService:
             raise ValidationError(f"File exceeds {max_mb:.2f} MB limit.")
 
         # MIME validation (Accurate content-based detection using python-magic)
-        import magic
-            
         # Read the first 2048 bytes for magic number detection
         file_obj.seek(0)
         file_content = file_obj.read(2048)
@@ -97,7 +101,6 @@ class FileStorageService:
         
         # If magic is too generic or fails, fall back to extension-based guessing
         if not mime_type or mime_type == 'application/octet-stream':
-            import mimetypes
             guessed_type = mimetypes.guess_type(file_obj.name)[0]
             if guessed_type:
                 mime_type = guessed_type
@@ -118,7 +121,6 @@ class FileStorageService:
         1. A file with the same name already exists.
         2. A file with the same content (checksum) already exists.
         """
-        import os
         name_exists = UserFile.objects.filter(owner=user, filename=base_name, is_deleted=False).exists()
         checksum_exists = FileStorageService.check_duplicate(checksum, user)
 
@@ -144,14 +146,13 @@ class FileStorageService:
         - always stores a new record
         """
         with transaction.atomic():
-            from .models import User
             user_locked = User.objects.select_for_update().get(pk=user.pk)
 
             if consume_quota and user_locked.consumed_storage + file_obj.size > user_locked.storage_limit_bytes:
                 raise ValidationError("Storage limit exceeded. Please clean up your vault.")
 
             mime_type = FileStorageService.validate_file(file_obj, check_size=consume_quota)
-            print(mime_type)
+
 
             # Important: compute_checksum reads the stream
             checksum = FileStorageService.compute_checksum(file_obj)
@@ -177,24 +178,26 @@ class FileStorageService:
                 user_locked.consumed_storage += file_obj.size
                 user_locked.save(update_fields=['consumed_storage'])
             
+            logger.info(f"ACTION PERFORMED: File stored: {new_file.filename} (ID: {new_file.id}) for user {user.email}")
             return new_file
 
     @staticmethod
     def init_chunked_upload(user, filename, total_size):
         """Initializes a chunked upload session."""
-        import os
-        from .models import ChunkedUpload
-        
         # Check quota first
         if user.consumed_storage + total_size > user.storage_limit_bytes:
             raise ValidationError("Storage limit exceeded.")
+
+        # Check overall file size limit (100MB)
+        if total_size > settings.MAX_UPLOAD_SIZE:
+            max_mb = settings.MAX_UPLOAD_SIZE / (1024 * 1024)
+            raise ValidationError(f"File exceeds {max_mb:.2f} MB limit.")
 
         # Create temporary file path
         temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp_uploads')
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir)
             
-        import uuid
         temp_filename = f"{uuid.uuid4()}_{filename}"
         file_path = os.path.join(temp_dir, temp_filename)
         
@@ -209,10 +212,13 @@ class FileStorageService:
     @staticmethod
     def save_chunk(chunked_upload, chunk_file, offset):
         """Saves a chunk of data to the temporary file."""
-        import os
-        
         if chunked_upload.status != 'uploading':
             raise ValidationError("Upload session is not active.")
+
+        # Extra safety: prevent chunks from being saved if the total size exceeds the limit
+        if chunked_upload.total_size > settings.MAX_UPLOAD_SIZE:
+            max_mb = settings.MAX_UPLOAD_SIZE / (1024 * 1024)
+            raise ValidationError(f"File exceeds {max_mb:.2f} MB limit.")
 
         # If it's a resume and offset is less than current_size, 
         # we probably want to seek to that offset and overwrite if necessary, 
@@ -228,15 +234,11 @@ class FileStorageService:
     @staticmethod
     def finalize_chunked_upload(chunked_upload, display_name=None, description=None):
         """Finalizes the chunked upload by creating a UserFile record."""
-        import os
-        from django.core.files import File
-        
         if chunked_upload.current_size < chunked_upload.total_size:
             raise ValidationError("Upload incomplete.")
 
         with open(chunked_upload.file_path, 'rb') as f:
-            from django.core.files import File
-            django_file = File(f, name=chunked_upload.filename)
+            django_file = DjangoFile(f, name=chunked_upload.filename)
             # content_type will be accurately detected by magic in validate_file
             
             user_file = FileStorageService.process_and_store_file(
@@ -300,6 +302,7 @@ class FileStorageService:
         file_instance.is_deleted = True
         file_instance.deleted_at = timezone.now()
         file_instance.save()
+        logger.info(f"ACTION PERFORMED: File moved to trash: {file_instance.filename} (ID: {file_instance.id})")
         return file_instance
     
     @staticmethod
@@ -308,7 +311,6 @@ class FileStorageService:
         Permanently deletes the file and updates user consumption.
         """
         with transaction.atomic():
-            from .models import User
             size = file_instance.file_size_bytes
             owner_locked = User.objects.select_for_update().get(pk=file_instance.owner.pk)
             
@@ -318,6 +320,7 @@ class FileStorageService:
             owner_locked.consumed_storage = max(0, owner_locked.consumed_storage - size)
             owner_locked.save(update_fields=['consumed_storage'])
             
+            logger.info(f"ACTION PERFORMED: File permanently deleted: {file_instance.filename} (ID: {file_instance.id})")
             return None
     
     @staticmethod
@@ -430,16 +433,19 @@ class FileStorageService:
     # =========================
 
     @staticmethod
-    def create_shareable_data(file_obj, request, duration_minutes=5, emails=None, message=""):
+    def create_shareable_data(file_obj, request, duration_hours=1, emails=None, message=""):
         """
         Generate Secure Link and optionally send email to recipients
         """
         try:
-            minutes = int(duration_minutes) if duration_minutes else 5
+            hours = float(duration_hours) if duration_hours else 1.0
         except (ValueError, TypeError):
-            minutes = 5
+            hours = 1.0
             
-        expiry = timezone.now() + timedelta(minutes=minutes)
+        if hours <= 0:
+            hours = 1.0
+            
+        expiry = timezone.now() + timedelta(hours=hours)
         shared_link = SharedLink.objects.create(
             file=file_obj,
             expires_at=expiry
@@ -458,7 +464,7 @@ class FileStorageService:
                 f"{owner_name} has shared a file with you via NexusShare.\n\n"
                 f"File: {file_obj.filename}\n"
                 f"Secure Link: {full_url}\n"
-                f"Expires In: {minutes} minutes\n\n"
+                f"Expires In: {hours} hour{'s' if hours != 1 else ''}\n\n"
             )
             
             if message:
@@ -567,8 +573,6 @@ class FileStorageService:
         Calculates daily upload volume (MB) for last 7 days 
         and weekly upload count for last 4 weeks.
         """
-        from datetime import timedelta
-        
         now = timezone.now()
         
         # 1. Daily Volume (Last 7 Days)
@@ -611,7 +615,6 @@ class FileStorageService:
         """
         Calculates storage usage snapshots for the last 6 months.
         """
-        from django.db.models import Q
         snapshots = []
         now = timezone.now()
         
@@ -651,8 +654,6 @@ class FileStorageService:
         """
         Calculates storage usage breakdown across categories.
         """
-        from django.db.models import Case, When, Value, IntegerField, Q
-        
         stats = UserFile.objects.filter(owner=user, is_deleted=False).exclude(description='[SYSTEM_INTERNAL_SHARE]').aggregate(
             images_size=Sum(Case(When(mime_type__in=FileStorageService.IMAGE_TYPES, then='file_size_bytes'), default=0, output_field=IntegerField())),
             docs_size=Sum(Case(When(mime_type__in=FileStorageService.DOC_TYPES, then='file_size_bytes'), default=0, output_field=IntegerField())),
