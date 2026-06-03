@@ -812,8 +812,8 @@ class PublicFileView(APIView):
         
         if is_metadata:
             headers = FileShareService.get_public_tracking_headers(shared_link)
-            # Use Supabase to get the public URL for preview
-            preview_url = SupabaseStorageService.get_public_url(file_obj.content.name)
+            # Use Supabase to get a signed URL for preview
+            preview_url = SupabaseStorageService.create_signed_url(file_obj.content.name)
             
             return Response({
                 'name': file_obj.filename,
@@ -837,8 +837,8 @@ class PublicFileView(APIView):
             return response
 
         from django.shortcuts import redirect
-        # For preview redirect, also use Supabase URL
-        return redirect(SupabaseStorageService.get_public_url(file_obj.content.name))
+        # For preview redirect, also use Supabase signed URL
+        return redirect(SupabaseStorageService.create_signed_url(file_obj.content.name))
 
 
 class DuplicateFilesView(APIView):

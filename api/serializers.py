@@ -6,6 +6,7 @@ from .models import (
     WorkstationMember, WorkstationInvite, WorkstationVersion, 
     ChunkedUpload, FileRequest
 )
+from .supabase_storage import SupabaseStorageService
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
@@ -148,11 +149,19 @@ class UserFileSerializer(serializers.ModelSerializer):
     File Serializer
     """
     size_readable = serializers.SerializerMethodField()
+    content = serializers.SerializerMethodField()
+
     class Meta:
         model = UserFile
         fields = ['id', 'filename', 'display_name', 'description', 'is_favorite', 'is_deleted', 'deleted_at', 'file_size_bytes', 'size_readable', 'content', 'mime_type', 'uploaded_at', 'last_accessed_at']
         read_only_fields = ['id', 'file_size_bytes', 'mime_type', 'uploaded_at', 'deleted_at', 'last_accessed_at']
-        
+
+    def get_content(self, obj):
+        # Return Supabase signed URL instead of local media path
+        if obj.content:
+            # content.name stores the supabase path
+            return SupabaseStorageService.create_signed_url(obj.content.name)
+        return None
 
     def get_size_readable(self, obj):
         num = float(obj.file_size_bytes)
