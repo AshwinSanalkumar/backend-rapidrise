@@ -15,10 +15,20 @@ logger = logging.getLogger('files')
 class SupabaseStorageService:
 
     @staticmethod
-    def upload_file(file_obj, file_name):
+    def upload_file(file_obj, file_name, mime_type=None):
         if not supabase:
             logger.error("Supabase client not initialized")
             return None
+
+        # Fallback for content_type
+        if not mime_type:
+            import mimetypes
+            mime_type = getattr(file_obj, 'content_type', None)
+            if not mime_type:
+                mime_type, _ = mimetypes.guess_type(file_name)
+            if not mime_type:
+                mime_type = 'application/octet-stream'
+
         response = (
             supabase.storage
             .from_(settings.SUPABASE_BUCKET)
@@ -26,7 +36,7 @@ class SupabaseStorageService:
                 path=file_name,
                 file=file_obj.read(),
                 file_options={
-                    "content-type": file_obj.content_type
+                    "content-type": mime_type
                 }
             )
         )

@@ -138,6 +138,21 @@ class FileStorageService:
         return f"{stem}({existing_count}){ext}"
 
     @staticmethod
+    def sanitize_filename(filename):
+        """
+        Sanitizes the filename by replacing spaces, hyphens, and other special characters.
+        Supabase/S3 sometimes has issues with specific characters.
+        """
+        import re
+        # Separate name and extension
+        name, ext = os.path.splitext(filename)
+        # Replace non-alphanumeric (except underscores) with underscores
+        # We explicitly replace hyphens as requested
+        clean_name = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+        # Combine back
+        return f"{clean_name}{ext}"
+
+    @staticmethod
     def process_and_store_file(user, file_obj, display_name=None, description=None, consume_quota=True):
         """
         Main upload handler:
@@ -159,8 +174,9 @@ class FileStorageService:
             checksum = FileStorageService.compute_checksum(file_obj)
             file_obj.seek(0)  # Reset pointer for saving
 
+            sanitized_name = FileStorageService.sanitize_filename(file_obj.name)
             resolved_filename = FileStorageService.resolve_filename(
-                file_obj.name,
+                sanitized_name,
                 user_locked,
                 checksum
             )
@@ -171,7 +187,7 @@ class FileStorageService:
             
             # Ensure pointer is at start before manual read in Supabase service
             file_obj.seek(0)
-            SupabaseStorageService.upload_file(file_obj, storage_name)
+            SupabaseStorageService.upload_file(file_obj, storage_name, mime_type=mime_type)
             # ---------------------------
 
             new_file = UserFile.objects.create(
@@ -208,7 +224,8 @@ class FileStorageService:
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir)
             
-        temp_filename = f"{uuid.uuid4()}_{filename}"
+        sanitized_filename = FileStorageService.sanitize_filename(filename)
+        temp_filename = f"{uuid.uuid4()}_{sanitized_filename}"
         file_path = os.path.join(temp_dir, temp_filename)
         
         chunked_upload = ChunkedUpload.objects.create(
