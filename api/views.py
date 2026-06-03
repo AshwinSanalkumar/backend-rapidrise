@@ -34,6 +34,7 @@ from .folder_service import FolderService
 from .fileShare_service import FileShareService
 from .workstation_service import WorkstationService
 from .request_service import RequestService
+from .supabase_storage import SupabaseStorageService
 from django.core.mail import EmailMessage
 
 logger = logging.getLogger('users')
@@ -811,17 +812,22 @@ class PublicFileView(APIView):
         
         if is_metadata:
             headers = FileShareService.get_public_tracking_headers(shared_link)
+            # Use Supabase to get the public URL for preview
+            preview_url = SupabaseStorageService.get_public_url(file_obj.content.name)
+            
             return Response({
                 'name': file_obj.filename,
-                'size': file_obj.content.size,
+                'size': file_obj.file_size_bytes, # Use dedicated size field
                 'type': file_obj.mime_type,
-                'preview': file_obj.content.url if hasattr(file_obj.content, 'url') else None
+                'preview': preview_url
             }, headers=headers)
 
         if is_download:
             from django.http import FileResponse
-            # Serving the file directly solves CORS issues and allows sending tracking headers
-            response = FileResponse(file_obj.content.open('rb'), content_type=file_obj.mime_type)
+            # Serving the file directly from Supabase
+            # Since content stores the supabase path
+            file_data = SupabaseStorageService.download_file(file_obj.content.name)
+            response = FileResponse(BytesIO(file_data), content_type=file_obj.mime_type)
             response['Content-Disposition'] = f'attachment; filename="{file_obj.filename}"'
             
             # Add tracking headers so frontend can update the UI
@@ -831,7 +837,8 @@ class PublicFileView(APIView):
             return response
 
         from django.shortcuts import redirect
-        return redirect(file_obj.content.url)
+        # For preview redirect, also use Supabase URL
+        return redirect(SupabaseStorageService.get_public_url(file_obj.content.name))
 
 
 class DuplicateFilesView(APIView):

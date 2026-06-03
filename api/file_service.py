@@ -18,6 +18,7 @@ from django.core.mail import EmailMessage
 from django.db import transaction
 from django.core.files import File as DjangoFile
 from .models import UserFile, SharedLink, User, ChunkedUpload
+from .supabase_storage import SupabaseStorageService
 
 logger = logging.getLogger('files')
 
@@ -164,9 +165,18 @@ class FileStorageService:
                 checksum
             )
 
+            # --- SUPABASE INTEGRATION ---
+            # Using the exact logic provided by the user
+            storage_name = f"uploads/{uuid.uuid4()}_{file_obj.name}"
+            
+            # Ensure pointer is at start before manual read in Supabase service
+            file_obj.seek(0)
+            SupabaseStorageService.upload_file(file_obj, storage_name)
+            # ---------------------------
+
             new_file = UserFile.objects.create(
                 owner=user_locked,
-                content=file_obj,
+                content=storage_name, # Storing the supabase path
                 filename=resolved_filename,
                 display_name=display_name or resolved_filename,
                 description=description,
