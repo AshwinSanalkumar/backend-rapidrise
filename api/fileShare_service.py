@@ -222,6 +222,7 @@ class FileShareService:
                 return None, None, "Download limit reached for this link."
             
             shared_link.download_count += 1
+            shared_link.is_accessed = True
             shared_link.save()
 
         return shared_link.file, shared_link, None

@@ -795,7 +795,7 @@ class PublicFileView(APIView):
         is_metadata = request.query_params.get('metadata') == 'true'
         is_download = request.query_params.get('download') == 'true'
         
-        increment_type = None if is_metadata else ('download' if is_download else 'access')
+        increment_type = 'download' if is_download else 'access'
         
         file_obj, shared_link, error = FileShareService.get_file_from_token(token, increment_type=increment_type)
         if error:
