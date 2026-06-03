@@ -818,6 +818,18 @@ class PublicFileView(APIView):
                 'preview': file_obj.content.url if hasattr(file_obj.content, 'url') else None
             }, headers=headers)
 
+        if is_download:
+            from django.http import FileResponse
+            # Serving the file directly solves CORS issues and allows sending tracking headers
+            response = FileResponse(file_obj.content.open('rb'), content_type=file_obj.mime_type)
+            response['Content-Disposition'] = f'attachment; filename="{file_obj.filename}"'
+            
+            # Add tracking headers so frontend can update the UI
+            tracking_headers = FileShareService.get_public_tracking_headers(shared_link)
+            for key, value in tracking_headers.items():
+                response[key] = value
+            return response
+
         from django.shortcuts import redirect
         return redirect(file_obj.content.url)
 
