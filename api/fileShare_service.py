@@ -12,6 +12,7 @@ from django.template.loader import render_to_string
 from django.db.models import Q
 from .models import SharedLink, UserFile
 from .file_service import FileStorageService
+from .supabase_storage import SupabaseStorageService
 
 import logging
 
@@ -43,8 +44,15 @@ class FileShareService:
             for fid in file_ids:
                 try:
                     f = UserFile.objects.get(id=fid, owner=user)
-                    zf.writestr(f.filename, f.content.read())
-                except Exception:
+                    if f.content:
+                        # Fetch file data from Supabase
+                        file_data = SupabaseStorageService.download_file(f.content.name)
+                        if file_data:
+                            zf.writestr(f.filename, file_data)
+                        else:
+                            logger.error(f"Failed to download file data for {f.filename} from Supabase")
+                except Exception as e:
+                    logger.error(f"Error adding file {fid} to bulk zip: {str(e)}")
                     continue
         buffer.seek(0)
 
