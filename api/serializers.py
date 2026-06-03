@@ -158,9 +158,12 @@ class UserFileSerializer(serializers.ModelSerializer):
 
     def get_content(self, obj):
         # Return Supabase signed URL instead of local media path
-        if obj.content:
-            # content.name stores the supabase path
-            return SupabaseStorageService.create_signed_url(obj.content.name)
+        try:
+            if obj.content:
+                # content.name stores the supabase path
+                return SupabaseStorageService.create_signed_url(obj.content.name)
+        except Exception:
+            pass
         return None
 
     def get_size_readable(self, obj):
